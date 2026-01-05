@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
 import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
+import { UserMenu } from "@/components/user-menu";
 import { 
   Plus, BookOpen, Users, TrendingUp, 
   Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet
@@ -247,22 +248,23 @@ export default function DashboardPage() {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            {stats.availableBalance > 0 && (
-              <Button 
-                variant="outline"
-                onClick={() => setShowWithdrawDialog(true)}
-                data-testid="button-withdraw"
-                className="gap-2"
-              >
-                <Wallet className="h-4 w-4" />
-                <span className="hidden sm:inline">Withdraw</span>
+            <Button
+              variant="outline"
+              onClick={() => setShowWithdrawDialog(true)}
+              data-testid="button-withdraw"
+              className="gap-2"
+            >
+              <Wallet className="h-4 w-4" />
+              <span className="hidden sm:inline">Withdraw</span>
+              {stats.availableBalance > 0 && (
                 <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
-              </Button>
-            )}
+              )}
+            </Button>
             <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
               <Plus className="h-4 w-4 mr-2" />
               Create Course
             </Button>
+            <UserMenu />
           </div>
         </div>
       </div>

@@ -1,20 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Header } from "@/components/header";
+import { CourseBuilderHeader } from "@/components/course-builder-header";
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
-import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
-import { 
-  Plus, BookOpen, Users, TrendingUp, 
-  Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet
-} from "lucide-react";
+import { BookOpen, Users, TrendingUp, Sparkles, LayoutGrid, DollarSign } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { generateCourseImage } from "@/lib/image-generator";
@@ -33,12 +28,21 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { companyId } = useParams<{ companyId: string }>();
-  const [activeTab, setActiveTab] = useState("courses");
+  const [location, setLocation] = useLocation();
+
+  const [activeTab, setActiveTab] = useState<"courses" | "create">(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    return tab === "create" ? "create" : "courses";
+  });
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedCourse, setGeneratedCourse] = useState<GeneratedCourse | null>(null);
-  const [showHowItWorks, setShowHowItWorks] = useState(false);
-  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const { toast } = useToast();
+
+  const setTabInUrl = (tab: "courses" | "create") => {
+    if (!companyId) return;
+    setLocation(tab === "create" ? `/dashboard/${companyId}?tab=create` : `/dashboard/${companyId}`);
+  };
 
   // Check if any courses are still generating to enable polling
   const hasGeneratingCourses = (courses: DashboardData["courses"] | undefined) => 
@@ -57,6 +61,11 @@ export default function DashboardPage() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [publishingCourseId, setPublishingCourseId] = useState<string | null>(null);
   const createTabRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    setActiveTab(tab === "create" ? "create" : "courses");
+  }, [location]);
 
   useEffect(() => {
     if (activeTab === "create" && createTabRef.current) {
@@ -151,6 +160,8 @@ export default function DashboardPage() {
       setGeneratedCourse(null);
       setActiveTab("courses");
     });
+
+    setTabInUrl("courses");
     
     // Show toast immediately
     toast({
@@ -201,20 +212,23 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-5 space-y-5">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-7 w-40" />
-          <Skeleton className="h-9 w-28" />
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-20" />
-          ))}
-        </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-48" />
-          ))}
+      <div className="h-full bg-background flex flex-col">
+        {companyId ? <CourseBuilderHeader companyId={companyId} /> : null}
+        <div className="p-5 space-y-5">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="h-9 w-28" />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-20" />
+            ))}
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-48" />
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -229,45 +243,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <>
-      <Header />
-      <div className="h-full bg-background flex flex-col">
-        <div className="border-b bg-background shrink-0">
-          <div className="flex h-14 items-center justify-between px-5">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <BookOpen className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <h1 className="font-semibold">Course Builder</h1>
-              <Button 
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowHowItWorks(true)}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground ml-1"
-                data-testid="button-how-it-works"
-              >
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline"
-                onClick={() => setShowWithdrawDialog(true)}
-                data-testid="button-withdraw"
-                className="gap-2"
-                disabled={stats.availableBalance <= 0}
-              >
-                <Wallet className="h-4 w-4" />
-                <span className="hidden sm:inline">Withdraw</span>
-                <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
-              </Button>
-              <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Course
-              </Button>
-            </div>
-          </div>
-        </div>
+    <div className="h-full bg-background flex flex-col">
+      {companyId ? (
+        <CourseBuilderHeader companyId={companyId} availableBalance={stats.availableBalance} />
+      ) : null}
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -277,7 +256,7 @@ export default function DashboardPage() {
           <StatCard icon={Users} label="Total Students" value={stats.totalStudents} testId="stat-students" bgColor="bg-violet-500/10 dark:bg-violet-400/10" iconColor="text-violet-600 dark:text-violet-400" />
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => setTabInUrl(value as "courses" | "create")}>
           <TabsList className="mb-5">
             <TabsTrigger value="courses" className="gap-2" data-testid="tab-courses">
               <LayoutGrid className="h-4 w-4" />
@@ -317,7 +296,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground mb-5 max-w-sm">
                     Create your first AI-powered course to get started.
                   </p>
-                  <Button onClick={() => setActiveTab("create")} data-testid="button-create-first-course">
+                  <Button onClick={() => setTabInUrl("create")} data-testid="button-create-first-course">
                     <Sparkles className="h-4 w-4 mr-2" />
                     Create Course
                   </Button>
@@ -349,106 +328,7 @@ export default function DashboardPage() {
         </Tabs>
       </div>
 
-      <Dialog open={showHowItWorks} onOpenChange={setShowHowItWorks}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>How Cursai Works</DialogTitle>
-            <DialogDescription>Everything you need to know about running your courses on our platform</DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                AI Course Generation
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                Enter any topic and our AI instantly generates a complete course with modules, lessons, and structured content. No more spending hours on curriculum design—let AI handle it.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                Customization & Control
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                Customize every module and lesson. Add your own content, regenerate sections, and personalize the course before publishing. You have full control.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                Free or Paid Courses
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                Decide whether your course is free or paid. Set any price you want. Free courses grow your audience, paid courses generate revenue.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                Member Access
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                Once published, your community members can discover and access your courses. Free courses are instantly available. Paid courses require purchase.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                Revenue Split
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                <span className="font-semibold text-foreground">You earn 70% of every course sale</span>. Cursai keeps 30% to maintain the platform and power the AI. It's a fair partnership.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                Earn Passively
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                Once your course is published, it sells 24/7. Watch your earnings grow as members purchase access. No ongoing effort required after publishing.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                Clean Learning Experience
-              </h3>
-              <p className="text-sm text-muted-foreground ml-7">
-                Members enjoy a distraction-free reading and listening experience. They can read lessons or listen with AI-powered text-to-speech powered by Murf TTS. Navigate through modules, track progress, and learn at their own pace without clutter.
-              </p>
-            </div>
-
-            <div className="bg-muted p-4 rounded-lg mt-6">
-              <p className="text-sm text-foreground font-semibold mb-2">Quick Start:</p>
-              <ol className="text-sm text-muted-foreground space-y-2 ml-4">
-                <li>1. Click "Create Course" and enter a topic</li>
-                <li>2. Review the AI-generated course structure</li>
-                <li>3. Customize modules and lessons as needed</li>
-                <li>4. Set it as free or add a price</li>
-                <li>5. Publish and start earning</li>
-              </ol>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <WithdrawRequestDialog
-        open={showWithdrawDialog}
-        onOpenChange={setShowWithdrawDialog}
-        companyId={companyId || ""}
-        availableBalance={stats.availableBalance}
-      />
-      </div>
-    </>
+    </div>
   );
 }
 

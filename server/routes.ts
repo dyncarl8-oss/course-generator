@@ -799,6 +799,12 @@ export async function registerRoutes(
           return res.status(400).json({ error: "Invalid experience" });
         }
         
+        // Update user's company ID if they're a customer and don't have it set
+        if (req.user && !req.user.whopCompanyId) {
+          await storage.updateUser(req.user.id, { whopCompanyId: companyId });
+          req.user = await storage.getUser(req.user.id);
+        }
+        
         const publishedCourses = await storage.getPublishedCoursesByCompany(companyId);
         
         // Get courses user has access to (including unpublished ones they already paid for)

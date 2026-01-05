@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, LogOut, Settings, BookOpen, LayoutDashboard } from "lucide-react";
+import { LogOut, Settings, LayoutDashboard } from "lucide-react";
 import { Link } from "wouter";
 
 export function UserMenu() {
@@ -53,26 +53,27 @@ export function UserMenu() {
         {user?.role === "creator" ? (
           <>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer" data-testid="link-dashboard">
+              <Link
+                href={user.whopCompanyId ? `/dashboard/${user.whopCompanyId}` : "/dashboard"}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="link-dashboard"
+              >
                 <LayoutDashboard className="h-4 w-4" />
                 Creator Dashboard
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/analytics" className="flex items-center gap-2 cursor-pointer" data-testid="link-analytics">
+              <Link
+                href={user.whopCompanyId ? `/dashboard/${user.whopCompanyId}/analytics` : "/analytics"}
+                className="flex items-center gap-2 cursor-pointer"
+                data-testid="link-analytics"
+              >
                 <Settings className="h-4 w-4" />
                 Analytics
               </Link>
             </DropdownMenuItem>
           </>
-        ) : (
-          <DropdownMenuItem asChild>
-            <Link href="/library" className="flex items-center gap-2 cursor-pointer" data-testid="link-library">
-              <BookOpen className="h-4 w-4" />
-              My Courses
-            </Link>
-          </DropdownMenuItem>
-        )}
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={logout}

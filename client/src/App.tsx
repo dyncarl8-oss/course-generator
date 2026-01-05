@@ -12,19 +12,23 @@ import CourseViewPage from "@/pages/course-view";
 import CourseEditPage from "@/pages/course-edit";
 import AnalyticsPage from "@/pages/analytics";
 import LandingPage from "@/pages/landing";
+import { CreatorAnalyticsRedirectPage, CreatorDashboardRedirectPage } from "@/pages/creator-redirect";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
-      
+
+      <Route path="/dashboard" component={CreatorDashboardRedirectPage} />
+      <Route path="/analytics" component={CreatorAnalyticsRedirectPage} />
+
       <Route path="/dashboard/:companyId" component={DashboardPage} />
       <Route path="/dashboard/:companyId/analytics" component={AnalyticsPage} />
       <Route path="/dashboard/:companyId/courses/:courseId/edit" component={CourseEditPage} />
-      
+
       <Route path="/experiences/:experienceId" component={ExperiencePage} />
       <Route path="/experiences/:experienceId/courses/:courseId" component={CourseViewPage} />
-      
+
       <Route component={NotFound} />
     </Switch>
   );

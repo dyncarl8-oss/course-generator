@@ -4,21 +4,58 @@ type Theme = "light" | "dark";
 
 interface ThemeContextType {
   theme: Theme;
-  toggleTheme: () => void;
-  setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function getWhopTheme(): Theme | "inherit" {
+  if (typeof document === "undefined") return "inherit";
+  const match = document.cookie.match(/whop-frosted-theme=(light|dark|inherit)/);
+  return (match?.[1] as Theme | "inherit") || "inherit";
+}
+
+function getSystemTheme(): Theme {
+  if (typeof window === "undefined") return "light";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme") as Theme;
-      if (stored) return stored;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    return "light";
+    const whopTheme = getWhopTheme();
+    if (whopTheme === "inherit") return getSystemTheme();
+    return whopTheme;
   });
+
+  useEffect(() => {
+    const updateTheme = () => {
+      const whopTheme = getWhopTheme();
+      const newTheme = whopTheme === "inherit" ? getSystemTheme() : whopTheme;
+      setThemeState(newTheme);
+    };
+
+    // Update on mount
+    updateTheme();
+
+    // Listen for system theme changes
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => {
+      if (getWhopTheme() === "inherit") {
+        updateTheme();
+      }
+    };
+    mediaQuery.addEventListener("change", handler);
+
+    // To handle cookie changes, we can listen for window focus
+    // or use a short interval since there's no "cookiechange" event
+    window.addEventListener("focus", updateTheme);
+    const interval = setInterval(updateTheme, 2000);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handler);
+      window.removeEventListener("focus", updateTheme);
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -27,19 +64,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove("dark");
     }
-    localStorage.setItem("theme", theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setThemeState((prev) => (prev === "light" ? "dark" : "light"));
-  };
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-  };
-
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme }}>
       {children}
     </ThemeContext.Provider>
   );

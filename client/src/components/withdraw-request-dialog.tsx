@@ -18,6 +18,7 @@ interface WithdrawRequestDialogProps {
   onOpenChange: (open: boolean) => void;
   companyId: string;
   availableBalance: number;
+  apiBasePath?: string;
 }
 
 export function WithdrawRequestDialog({
@@ -25,13 +26,17 @@ export function WithdrawRequestDialog({
   onOpenChange,
   companyId,
   availableBalance,
+  apiBasePath,
 }: WithdrawRequestDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const withdrawMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/dashboard/${companyId}/withdraw-request`, {});
+      const endpoint = apiBasePath
+        ? `${apiBasePath}/withdraw-request`
+        : `/api/dashboard/${companyId}/withdraw-request`;
+      return apiRequest("POST", endpoint, {});
     },
     onSuccess: (data) => {
       toast({

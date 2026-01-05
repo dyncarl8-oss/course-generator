@@ -1,0 +1,1546 @@
+import type { Express, Request, Response, NextFunction } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { verifyUserToken, checkAccess, getUser as getWhopUser, createCheckoutConfiguration, verifyPaymentComplete, whop, sendNotification, getCompanyIdFromExperience } from "./whop";
+import { generateCourse, regenerateModule, regenerateLesson, generateCourseImage, generateImagePrompt, generateCourseMediaPlan, generateLessonImage, regenerateImageWithNanoBanana } from "./gemini";
+import { generateTTS } from "./tts";
+import { generatedCourseSchema } from "@shared/schema";
+import { randomUUID } from "crypto";
+import { sendWithdrawRequestEmail } from "./resend";
+
+interface AuthenticatedRequest extends Request {
+  whopUserId?: string;
+  user?: Awaited<ReturnType<typeof storage.getUser>>;
+  accessLevel?: "admin" | "customer" | "no_access";
+}
+
+async function authenticateWhop(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const token = req.headers["x-whop-user-token"] as string;
+  
+  if (!token) {
+    return res.status(401).json({ error: "Missing authentication token" });
+  }
+
+  try {
+    const result = await verifyUserToken(token);
+    if (!result) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    
+    req.whopUserId = result.userId;
+    
+    let user = await storage.getUserByWhopId(result.userId);
+    
+    if (!user) {
+      const whopUserData = await getWhopUser(result.userId);
+      user = await storage.createUser({
+        id: randomUUID(),
+        whopUserId: result.userId,
+        email: whopUserData?.email || null,
+        username: whopUserData?.username || null,
+        profilePicUrl: whopUserData?.profile_picture?.url || null,
+        role: "member",
+        whopCompanyId: null,
+      });
+    } else if (!user.profilePicUrl) {
+      const whopUserData = await getWhopUser(result.userId);
+      if (whopUserData?.profile_picture?.url) {
+        await storage.updateUser(user.id, { profilePicUrl: whopUserData.profile_picture.url });
+        user = await storage.getUser(user.id);
+      }
+    }
+    
+    req.user = user;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Authentication failed" });
+  }
+}
+
+async function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const companyId = req.params.companyId || req.body.companyId;
+  
+  if (!companyId || !req.whopUserId) {
+    return res.status(400).json({ error: "Missing company ID" });
+  }
+
+  try {
+    const access = await checkAccess(companyId, req.whopUserId);
+    if (access.access_level !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    
+    req.accessLevel = access.access_level;
+    
+    if (req.user && req.user.role !== "creator") {
+      await storage.updateUser(req.user.id, { 
+        role: "creator", 
+        whopCompanyId: companyId 
+      });
+      req.user = await storage.getUser(req.user.id);
+    }
+    
+    next();
+  } catch {
+    return res.status(403).json({ error: "Access denied" });
+  }
+}
+
+async function requireExperienceAccess(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const experienceId = req.params.experienceId;
+  
+  if (!experienceId || !req.whopUserId) {
+    return res.status(400).json({ error: "Missing experience ID" });
+  }
+
+  try {
+    const access = await checkAccess(experienceId, req.whopUserId);
+    if (!access.has_access) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    
+    req.accessLevel = access.access_level;
+    next();
+  } catch {
+    return res.status(403).json({ error: "Access denied" });
+  }
+}
+
+export async function registerRoutes(
+  httpServer: Server,
+  app: Express
+): Promise<Server> {
+  
+  app.get("/api/auth/me", authenticateWhop, (req: AuthenticatedRequest, res) => {
+    res.json(req.user);
+  });
+
+  app.get("/api/dashboard/:companyId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const courses = await storage.getCoursesByCreator(req.user.id);
+      const earnings = await storage.getCreatorEarnings(req.user.id);
+      
+      const coursesWithStats = await Promise.all(
+        courses.map(async (course) => {
+          const courseWithModules = await storage.getCourseWithModules(course.id);
+          const access = await storage.getCourseAccessByCourse(course.id);
+          return {
+            ...course,
+            moduleCount: courseWithModules?.modules.length || 0,
+            lessonCount: courseWithModules?.modules.reduce((acc, m) => acc + m.lessons.length, 0) || 0,
+            studentCount: access.length,
+          };
+        })
+      );
+
+      res.json({
+        user: req.user,
+        courses: coursesWithStats,
+        companyId: req.params.companyId,
+        earnings: earnings ? { 
+          totalEarnings: earnings.totalEarnings, 
+          availableBalance: earnings.availableBalance,
+          pendingBalance: earnings.pendingBalance 
+        } : { 
+          totalEarnings: 0, 
+          availableBalance: 0,
+          pendingBalance: 0 
+        },
+      });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to load dashboard" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/withdraw-request", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const earnings = await storage.getCreatorEarnings(req.user.id);
+      
+      if (!earnings || earnings.availableBalance <= 0) {
+        return res.status(400).json({ error: "No available balance to withdraw" });
+      }
+
+      const adminName = req.user.username || req.user.email || "Unknown Admin";
+      
+      await sendWithdrawRequestEmail({
+        adminName,
+        adminEmail: req.user.email,
+        adminUsername: req.user.username,
+        whopUserId: req.user.whopUserId,
+        amount: earnings.availableBalance,
+        availableBalance: earnings.availableBalance,
+        totalEarnings: earnings.totalEarnings,
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Withdraw request sent successfully",
+        amount: earnings.availableBalance,
+      });
+    } catch (error) {
+      console.error("Failed to process withdraw request:", error);
+      res.status(500).json({ error: "Failed to send withdraw request" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/courses/generate", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { topic } = req.body;
+      
+      if (!topic || typeof topic !== "string") {
+        return res.status(400).json({ error: "Topic is required" });
+      }
+
+      const generatedCourse = await generateCourse(topic);
+      res.json(generatedCourse);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to generate course" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/courses/generate-image", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { courseTitle } = req.body;
+      
+      if (!courseTitle || typeof courseTitle !== "string") {
+        return res.status(400).json({ error: "Course title is required" });
+      }
+
+      const imageDataUrl = await generateCourseImage(courseTitle);
+      
+      if (!imageDataUrl) {
+        return res.status(500).json({ error: "Failed to generate image" });
+      }
+
+      res.json({ imageDataUrl });
+    } catch (error) {
+      console.error("Image generation error:", error);
+      res.status(500).json({ error: "Failed to generate course image" });
+    }
+  });
+
+  app.post("/api/generate-image-prompt", async (req, res) => {
+    try {
+      const { courseTitle } = req.body;
+      
+      if (!courseTitle || typeof courseTitle !== "string") {
+        return res.status(400).json({ error: "Course title is required" });
+      }
+
+      const prompt = await generateImagePrompt(courseTitle);
+      res.json({ prompt });
+    } catch (error) {
+      console.error("Prompt generation error:", error);
+      res.status(500).json({ error: "Failed to generate image prompt" });
+    }
+  });
+
+  app.post("/api/generate-course-image", async (req, res) => {
+    try {
+      const { courseTitle } = req.body;
+      
+      if (!courseTitle || typeof courseTitle !== "string") {
+        return res.status(400).json({ error: "Course title is required" });
+      }
+
+      console.log("Generating course image for:", courseTitle);
+      const imageUrl = await generateCourseImage(courseTitle);
+      
+      if (!imageUrl) {
+        return res.status(500).json({ error: "Failed to generate image" });
+      }
+
+      res.json({ imageUrl });
+    } catch (error) {
+      console.error("Image generation error:", error);
+      res.status(500).json({ error: "Failed to generate course image" });
+    }
+  });
+
+  app.post("/api/generate-course-media-plan", async (req, res) => {
+    try {
+      const { courseTitle, modules } = req.body;
+      
+      if (!courseTitle || !modules) {
+        return res.status(400).json({ error: "Course title and modules are required" });
+      }
+
+      console.log("Generating media plan for course:", courseTitle);
+      const mediaPlan = await generateCourseMediaPlan(courseTitle, modules);
+      
+      res.json({ mediaPlan });
+    } catch (error) {
+      console.error("Media plan generation error:", error);
+      res.status(500).json({ error: "Failed to generate media plan" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/courses", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const { generatedCourse, isFree, price, coverImage, generateLessonImages } = req.body;
+      const companyId = req.params.companyId;
+      
+      const validated = generatedCourseSchema.safeParse(generatedCourse);
+      if (!validated.success) {
+        return res.status(400).json({ error: "Invalid course data" });
+      }
+
+      // Create course with "generating" status if lesson images will be generated
+      const course = await storage.createCourse({
+        creatorId: req.user.id,
+        title: validated.data.course_title,
+        description: validated.data.description || null,
+        coverImage: coverImage || null,
+        published: false,
+        isFree: isFree === true,
+        price: isFree === true ? "0" : (price || "0"),
+        generationStatus: generateLessonImages ? "generating" : "complete",
+      });
+
+      const createdLessons: { moduleIndex: number; lessonIndex: number; lessonId: string }[] = [];
+
+      // Create all modules in parallel for faster response
+      const modulePromises = validated.data.modules.map((moduleData, i) =>
+        storage.createModule({
+          courseId: course.id,
+          title: moduleData.module_title,
+          orderIndex: i,
+        }).then(module => ({ module, moduleIndex: i, lessons: moduleData.lessons }))
+      );
+      const createdModules = await Promise.all(modulePromises);
+
+      // Create all lessons in parallel for faster response
+      const lessonPromises = createdModules.flatMap(({ module, moduleIndex, lessons }) =>
+        lessons.map((lessonData, j) =>
+          storage.createLesson({
+            moduleId: module.id,
+            title: lessonData.lesson_title,
+            content: lessonData.content,
+            orderIndex: j,
+          }).then(lesson => ({ moduleIndex, lessonIndex: j, lessonId: lesson.id }))
+        )
+      );
+      const lessonResults = await Promise.all(lessonPromises);
+      createdLessons.push(...lessonResults);
+
+      // Return the course immediately - images will be generated in the background
+      const courseWithModules = await storage.getCourseWithModules(course.id);
+      res.json(courseWithModules);
+
+      // Generate lesson images in the background if enabled
+      console.log("generateLessonImages flag:", generateLessonImages);
+      if (generateLessonImages) {
+        // Process images asynchronously without blocking the response
+        setImmediate(async () => {
+          try {
+            console.log("=== Starting background lesson image generation for course:", validated.data.course_title);
+            console.log("Modules to process:", validated.data.modules.length);
+            
+            const mediaPlan = await generateCourseMediaPlan(
+              validated.data.course_title, 
+              validated.data.modules
+            );
+            
+            console.log("Media plan generated:", JSON.stringify(mediaPlan, null, 2));
+            
+            let imagesGenerated = 0;
+            let imagesFailed = 0;
+            const maxRetries = 2;
+            
+            for (const modulePlan of mediaPlan) {
+              for (const lessonPlan of modulePlan.lessons) {
+                // Normalize to images array - handle both old format (shouldAddImage/imagePrompt) and new format (images[])
+                const imagePlans = Array.isArray(lessonPlan.images) 
+                  ? lessonPlan.images 
+                  : (lessonPlan as any).shouldAddImage && (lessonPlan as any).imagePrompt 
+                    ? [{ 
+                        imagePrompt: (lessonPlan as any).imagePrompt, 
+                        imageAlt: (lessonPlan as any).imageAlt ?? "", 
+                        placement: (lessonPlan as any).placement ?? 0 
+                      }] 
+                    : [];
+                
+                if (!imagePlans.length) continue;
+                
+                const lessonInfo = createdLessons.find(
+                  l => l.moduleIndex === modulePlan.moduleIndex && l.lessonIndex === lessonPlan.lessonIndex
+                );
+                
+                console.log(`Looking for lesson at module ${modulePlan.moduleIndex}, lesson ${lessonPlan.lessonIndex}:`, lessonInfo ? "found" : "not found");
+                console.log(`Images to generate for this lesson: ${imagePlans.length}`);
+                
+                if (lessonInfo) {
+                  for (const imagePlan of imagePlans) {
+                      let imageUrl: string | null = null;
+                      let attempts = 0;
+                      
+                      // Retry logic for image generation
+                      while (!imageUrl && attempts < maxRetries) {
+                        attempts++;
+                        try {
+                          console.log(`[Attempt ${attempts}/${maxRetries}] Generating image for lesson ${lessonInfo.lessonId} at placement ${imagePlan.placement}...`);
+                          imageUrl = await generateLessonImage(imagePlan.imagePrompt);
+                          
+                          if (!imageUrl && attempts < maxRetries) {
+                            console.log(`Image generation returned null, retrying in 2 seconds...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                          }
+                        } catch (imgError) {
+                          console.error(`Attempt ${attempts} failed for lesson ${lessonInfo.lessonId}:`, imgError);
+                          if (attempts < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                          }
+                        }
+                      }
+                      
+                      if (imageUrl) {
+                        const newMedia = {
+                          id: randomUUID(),
+                          type: "image" as const,
+                          url: imageUrl,
+                          alt: imagePlan.imageAlt || "",
+                          caption: "",
+                          placement: imagePlan.placement ?? 0,
+                          prompt: imagePlan.imagePrompt,
+                        };
+                        await storage.addLessonMedia(lessonInfo.lessonId, newMedia);
+                        imagesGenerated++;
+                        console.log(`Image added to lesson ${lessonInfo.lessonId} at placement ${imagePlan.placement}. Total images: ${imagesGenerated}`);
+                      } else {
+                        imagesFailed++;
+                        console.log(`Failed to generate image for lesson ${lessonInfo.lessonId} after ${maxRetries} attempts`);
+                      }
+                  }
+                }
+              }
+            }
+            
+            console.log(`=== Finished lesson image generation. Success: ${imagesGenerated}, Failed: ${imagesFailed}`);
+            
+            // Update course status to complete
+            await storage.updateCourse(course.id, { generationStatus: "complete" });
+            
+            // Send Whop notification to the admin
+            try {
+              const realCompanyId = await getCompanyIdFromExperience(companyId);
+              if (realCompanyId) {
+                await sendNotification({
+                  companyId: realCompanyId,
+                  title: "Course Ready!",
+                  content: `Your course "${validated.data.course_title}" has finished generating. All lesson images are now ready.`,
+                  subtitle: `${imagesGenerated} images generated successfully`,
+                  restPath: `${companyId}/courses/${course.id}/edit`,
+                });
+                console.log("Notification sent to company:", realCompanyId);
+              } else {
+                console.log("Could not get company ID from experience:", companyId);
+              }
+            } catch (notifyError) {
+              console.error("Failed to send completion notification:", notifyError);
+            }
+            
+          } catch (mediaPlanError) {
+            console.error("Failed to generate media plan:", mediaPlanError);
+            // Update status to complete even if image generation failed
+            await storage.updateCourse(course.id, { generationStatus: "complete" });
+            
+            // Notify admin about the failure
+            try {
+              const realCompanyId = await getCompanyIdFromExperience(companyId);
+              if (realCompanyId) {
+                await sendNotification({
+                  companyId: realCompanyId,
+                  title: "Course Created",
+                  content: `Your course "${validated.data.course_title}" was created, but some lesson images could not be generated. You can add images manually in the course editor.`,
+                  restPath: `${companyId}/courses/${course.id}/edit`,
+                });
+              }
+            } catch (notifyError) {
+              console.error("Failed to send failure notification:", notifyError);
+            }
+          }
+        });
+      } else {
+        console.log("Skipping lesson image generation (toggle disabled)");
+      }
+    } catch {
+      
+      res.status(500).json({ error: "Failed to create course" });
+    }
+  });
+
+  app.get("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const course = await storage.getCourseWithModules(req.params.courseId);
+      
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.creatorId !== req.user?.id) {
+        return res.status(403).json({ error: "Not your course" });
+      }
+
+      res.json(course);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to get course" });
+    }
+  });
+
+  app.patch("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const course = await storage.getCourse(req.params.courseId);
+      
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.creatorId !== req.user?.id) {
+        return res.status(403).json({ error: "Not your course" });
+      }
+
+      const { title, description, published, isFree, price, coverImage } = req.body;
+      
+      const updated = await storage.updateCourse(course.id, {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(published !== undefined && { published }),
+        ...(isFree !== undefined && { isFree }),
+        ...(price !== undefined && { price }),
+        ...(coverImage !== undefined && { coverImage }),
+      });
+
+      res.json(updated);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to update course" });
+    }
+  });
+
+  app.delete("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const course = await storage.getCourse(req.params.courseId);
+      
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.creatorId !== req.user?.id) {
+        return res.status(403).json({ error: "Not your course" });
+      }
+
+      await storage.deleteCourse(course.id);
+      res.json({ success: true });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to delete course" });
+    }
+  });
+
+  app.patch("/api/dashboard/:companyId/modules/:moduleId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const module = await storage.getModule(req.params.moduleId);
+      if (!module) {
+        return res.status(404).json({ error: "Module not found" });
+      }
+
+      const { title } = req.body;
+      const updated = await storage.updateModule(module.id, { title });
+      res.json(updated);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to update module" });
+    }
+  });
+
+  app.delete("/api/dashboard/:companyId/modules/:moduleId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteModule(req.params.moduleId);
+      res.json({ success: true });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to delete module" });
+    }
+  });
+
+  app.patch("/api/dashboard/:companyId/lessons/:lessonId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.lessonId);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+
+      const { title, content, media } = req.body;
+      const updated = await storage.updateLesson(lesson.id, { 
+        ...(title !== undefined && { title }),
+        ...(content !== undefined && { content }),
+        ...(media !== undefined && { media }),
+      });
+      res.json(updated);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to update lesson" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/lessons/:lessonId/media", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.lessonId);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+
+      const { type, url, alt, caption, placement } = req.body;
+      
+      if (!type || !url) {
+        return res.status(400).json({ error: "Type and URL are required" });
+      }
+
+      const newMedia = {
+        id: randomUUID(),
+        type: type as "image" | "video",
+        url,
+        alt: alt || "",
+        caption: caption || "",
+        placement: placement ?? 0,
+      };
+
+      const updatedMedia = [...(lesson.media || []), newMedia];
+      const updated = await storage.updateLesson(lesson.id, { media: updatedMedia });
+      res.json(updated);
+    } catch {
+      res.status(500).json({ error: "Failed to add media" });
+    }
+  });
+
+  app.delete("/api/dashboard/:companyId/lessons/:lessonId/media/:mediaId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.lessonId);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+
+      const updatedMedia = (lesson.media || []).filter(m => m.id !== req.params.mediaId);
+      const updated = await storage.updateLesson(lesson.id, { media: updatedMedia });
+      res.json(updated);
+    } catch {
+      res.status(500).json({ error: "Failed to remove media" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/lessons/:lessonId/generate-image", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.lessonId);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+
+      const { prompt, alt, placement } = req.body;
+      
+      if (!prompt) {
+        return res.status(400).json({ error: "Prompt is required" });
+      }
+
+      const imageUrl = await generateLessonImage(prompt);
+      if (!imageUrl) {
+        return res.status(500).json({ error: "Failed to generate image" });
+      }
+
+      const newMedia = {
+        id: randomUUID(),
+        type: "image" as const,
+        url: imageUrl,
+        alt: alt || "",
+        caption: "",
+        placement: placement ?? 0,
+        prompt: prompt, // Store the prompt for regeneration
+      };
+
+      const updatedMedia = [...(lesson.media || []), newMedia];
+      const updated = await storage.updateLesson(lesson.id, { media: updatedMedia });
+      res.json({ lesson: updated, generatedImage: newMedia });
+    } catch {
+      res.status(500).json({ error: "Failed to generate image" });
+    }
+  });
+
+  // Regenerate image using NanoBanana API (Fix with AI)
+  app.post("/api/dashboard/:companyId/lessons/:lessonId/media/:mediaId/regenerate", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.lessonId);
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+
+      const mediaItem = (lesson.media || []).find(m => m.id === req.params.mediaId);
+      if (!mediaItem) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+
+      if (mediaItem.type !== "image") {
+        return res.status(400).json({ error: "Can only regenerate images" });
+      }
+
+      // Get prompt from media item or request body
+      const prompt = req.body.prompt || mediaItem.prompt;
+      if (!prompt) {
+        return res.status(400).json({ error: "No prompt available for regeneration. This image may have been added manually." });
+      }
+
+      console.log("Regenerating image with NanoBanana, prompt:", prompt);
+      const newImageUrl = await regenerateImageWithNanoBanana(prompt);
+      
+      if (!newImageUrl) {
+        return res.status(500).json({ error: "Failed to regenerate image" });
+      }
+
+      // Update the media item with the new URL
+      const updatedMedia = (lesson.media || []).map(m => 
+        m.id === req.params.mediaId 
+          ? { ...m, url: newImageUrl }
+          : m
+      );
+      
+      const updated = await storage.updateLesson(lesson.id, { media: updatedMedia });
+      res.json({ lesson: updated, regeneratedMedia: updatedMedia.find(m => m.id === req.params.mediaId) });
+    } catch (error) {
+      console.error("Failed to regenerate image:", error);
+      res.status(500).json({ error: "Failed to regenerate image" });
+    }
+  });
+
+  app.delete("/api/dashboard/:companyId/lessons/:lessonId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteLesson(req.params.lessonId);
+      res.json({ success: true });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to delete lesson" });
+    }
+  });
+
+  app.get("/api/dashboard/:companyId/courses/:courseId/analytics", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.creatorId !== req.user?.id) {
+        return res.status(403).json({ error: "Not your course" });
+      }
+
+      const [access, payments] = await Promise.all([
+        storage.getCourseAccessByCourse(course.id),
+        storage.getPaymentsByCourse(course.id),
+      ]);
+      
+      const paymentsByUser = new Map(payments.map(p => [p.buyerId, p]));
+      const totalEarnings = payments.reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
+      
+      // Fetch profile pictures from Whop for users who don't have them
+      const studentsWithPics = await Promise.all(
+        access.map(async (a) => {
+          const payment = paymentsByUser.get(a.user.id);
+          let profilePicUrl = a.user.profilePicUrl;
+          
+          // If no profile pic stored, try to fetch from Whop
+          if (!profilePicUrl && a.user.whopUserId) {
+            try {
+              const whopUserData = await getWhopUser(a.user.whopUserId);
+              if (whopUserData?.profile_picture?.url) {
+                profilePicUrl = whopUserData.profile_picture.url;
+                // Update in storage for future requests
+                await storage.updateUser(a.user.id, { profilePicUrl });
+              }
+            } catch {
+              // Ignore errors fetching profile pic
+            }
+          }
+          
+          return {
+            id: a.user.id,
+            username: a.user.username,
+            email: a.user.email,
+            profilePicUrl,
+            grantedAt: a.grantedAt,
+            purchasedViaWhop: a.purchasedViaWhop,
+            paidAmount: payment?.amount || null,
+            paidAt: payment?.completedAt || null,
+          };
+        })
+      );
+      
+      res.json({
+        course,
+        students: studentsWithPics,
+        totalStudents: access.length,
+        totalEarnings: totalEarnings.toFixed(2),
+        paidStudents: payments.length,
+      });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to get analytics" });
+    }
+  });
+
+  app.get("/api/experiences/:experienceId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      const isAdmin = req.accessLevel === "admin";
+
+      if (isAdmin && req.user) {
+        // Admin view - show all courses with management stats
+        // Set the admin's company ID if not already set
+        const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+        if (companyId && !req.user.whopCompanyId) {
+          await storage.updateUser(req.user.id, { 
+            role: "creator", 
+            whopCompanyId: companyId 
+          });
+          req.user = await storage.getUser(req.user.id);
+        } else if (req.user.role !== "creator") {
+          await storage.updateUser(req.user.id, { role: "creator" });
+          req.user = await storage.getUser(req.user.id);
+        }
+
+        // Re-assert user exists for TypeScript after the conditional blocks
+        if (!req.user) {
+          return res.status(401).json({ error: "User not found" });
+        }
+
+        const userId = req.user.id;
+        const courses = await storage.getCoursesByCreator(userId);
+        const coursesWithStats = await Promise.all(
+          courses.map(async (course) => {
+            const courseWithModules = await storage.getCourseWithModules(course.id);
+            const access = await storage.getCourseAccessByCourse(course.id);
+            return {
+              ...course,
+              moduleCount: courseWithModules?.modules.length || 0,
+              lessonCount: courseWithModules?.modules.reduce((acc, m) => acc + m.lessons.length, 0) || 0,
+              studentCount: access.length,
+              hasAccess: true,
+            };
+          })
+        );
+
+        // Get creator earnings
+        const earnings = await storage.getCreatorEarnings(userId);
+
+        res.json({
+          user: req.user,
+          courses: coursesWithStats,
+          experienceId: req.params.experienceId,
+          accessLevel: req.accessLevel,
+          earnings: earnings ? { 
+            totalEarnings: earnings.totalEarnings,
+            availableBalance: earnings.availableBalance,
+            pendingBalance: earnings.pendingBalance 
+          } : { 
+            totalEarnings: "0",
+            availableBalance: 0,
+            pendingBalance: 0 
+          },
+        });
+      } else {
+        // Customer view - show published courses + unpublished courses user has access to
+        // Only show courses from this admin's company, not from all admins
+        const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+        if (!companyId) {
+          return res.status(400).json({ error: "Invalid experience" });
+        }
+        
+        // Update user's company ID if they're a customer and don't have it set
+        if (req.user && !req.user.whopCompanyId) {
+          await storage.updateUser(req.user.id, { whopCompanyId: companyId });
+          req.user = await storage.getUser(req.user.id);
+        }
+        
+        const publishedCourses = await storage.getPublishedCoursesByCompany(companyId);
+        
+        // Get courses user has access to (including unpublished ones they already paid for)
+        const userAccessRecords = req.user ? await storage.getCourseAccessByUser(req.user.id) : [];
+        
+        // Filter out access records for courses that still exist
+        const validAccessRecords = [];
+        for (const access of userAccessRecords) {
+          const course = await storage.getCourse(access.courseId);
+          if (course) {
+            validAccessRecords.push(access);
+          }
+        }
+        const accessedCourseIds = new Set(validAccessRecords.map(a => a.courseId));
+        
+        // Get unpublished courses user has access to (only those that still exist)
+        const unpublishedAccessedCourses = await Promise.all(
+          validAccessRecords
+            .filter(a => !publishedCourses.some(c => c.id === a.courseId))
+            .map(async (access) => {
+              const course = await storage.getCourse(access.courseId);
+              return course;
+            })
+        );
+        
+        // Combine published courses with unpublished ones user has access to
+        const allVisibleCourses = [
+          ...publishedCourses,
+          ...unpublishedAccessedCourses.filter((c): c is NonNullable<typeof c> => c !== null),
+        ];
+        
+        const coursesWithAccess = await Promise.all(
+          allVisibleCourses.map(async (course) => {
+            const courseWithModules = await storage.getCourseWithModules(course.id);
+            const hasAccess = accessedCourseIds.has(course.id);
+            
+            return {
+              ...course,
+              moduleCount: courseWithModules?.modules.length || 0,
+              lessonCount: courseWithModules?.modules.reduce((acc, m) => acc + m.lessons.length, 0) || 0,
+              hasAccess,
+            };
+          })
+        );
+
+        res.json({
+          user: req.user,
+          courses: coursesWithAccess,
+          experienceId: req.params.experienceId,
+          accessLevel: req.accessLevel,
+        });
+      }
+    } catch {
+      
+      res.status(500).json({ error: "Failed to load courses" });
+    }
+  });
+
+  // Admin routes for experience context
+  app.post("/api/experiences/:experienceId/courses/generate", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { topic } = req.body;
+      if (!topic || typeof topic !== "string") {
+        return res.status(400).json({ error: "Topic is required" });
+      }
+
+      const generatedCourse = await generateCourse(topic);
+      res.json(generatedCourse);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to generate course" });
+    }
+  });
+
+  app.post("/api/experiences/:experienceId/courses/generate-image", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { courseTitle } = req.body;
+      
+      if (!courseTitle || typeof courseTitle !== "string") {
+        return res.status(400).json({ error: "Course title is required" });
+      }
+
+      const imageDataUrl = await generateCourseImage(courseTitle);
+      
+      if (!imageDataUrl) {
+        return res.status(500).json({ error: "Failed to generate image" });
+      }
+
+      res.json({ imageDataUrl });
+    } catch (error) {
+      console.error("Image generation error:", error);
+      res.status(500).json({ error: "Failed to generate course image" });
+    }
+  });
+
+  app.post("/api/experiences/:experienceId/withdraw-request", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const earnings = await storage.getCreatorEarnings(req.user.id);
+      
+      if (!earnings || earnings.availableBalance <= 0) {
+        return res.status(400).json({ error: "No available balance to withdraw" });
+      }
+
+      const adminName = req.user.username || req.user.email || "Unknown Admin";
+      
+      await sendWithdrawRequestEmail({
+        adminName,
+        adminEmail: req.user.email,
+        adminUsername: req.user.username,
+        whopUserId: req.user.whopUserId,
+        amount: earnings.availableBalance,
+        availableBalance: earnings.availableBalance,
+        totalEarnings: earnings.totalEarnings,
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Withdraw request sent successfully",
+        amount: earnings.availableBalance,
+      });
+    } catch (error) {
+      console.error("Failed to process withdraw request:", error);
+      res.status(500).json({ error: "Failed to send withdraw request" });
+    }
+  });
+
+  app.post("/api/experiences/:experienceId/courses", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      // Ensure user is marked as creator and has company ID set
+      const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+      if (companyId && (!req.user.whopCompanyId || req.user.role !== "creator")) {
+        await storage.updateUser(req.user.id, { 
+          role: "creator",
+          whopCompanyId: companyId 
+        });
+        req.user = await storage.getUser(req.user.id);
+      }
+
+      const { generatedCourse, isFree, price, coverImage, generateLessonImages } = req.body;
+      
+      const validated = generatedCourseSchema.safeParse(generatedCourse);
+      if (!validated.success) {
+        return res.status(400).json({ error: "Invalid course data" });
+      }
+
+      // Create course with "generating" status if lesson images will be generated
+      const course = await storage.createCourse({
+        creatorId: req.user!.id,
+        title: validated.data.course_title,
+        description: validated.data.description || null,
+        coverImage: coverImage || null,
+        published: false,
+        isFree: isFree === true,
+        price: isFree === true ? "0" : (price || "0"),
+        generationStatus: generateLessonImages ? "generating" : "complete",
+      });
+
+      const createdLessons: { moduleIndex: number; lessonIndex: number; lessonId: string }[] = [];
+
+      // Create all modules in parallel for faster response
+      const modulePromises = validated.data.modules.map(async (moduleData, i) => {
+        const module = await storage.createModule({
+          courseId: course.id,
+          title: moduleData.module_title,
+          orderIndex: i,
+        });
+
+        for (let j = 0; j < moduleData.lessons.length; j++) {
+          const lessonData = moduleData.lessons[j];
+          const lesson = await storage.createLesson({
+            moduleId: module.id,
+            title: lessonData.lesson_title,
+            content: lessonData.content,
+            orderIndex: j,
+          });
+          createdLessons.push({ moduleIndex: i, lessonIndex: j, lessonId: lesson.id });
+        }
+      });
+
+      await Promise.all(modulePromises);
+
+      // Return the course immediately - images will be generated in the background
+      const courseWithModules = await storage.getCourseWithModules(course.id);
+      res.json(courseWithModules);
+
+      // Generate lesson images in the background if enabled
+      const experienceId = req.params.experienceId;
+      console.log("generateLessonImages flag:", generateLessonImages);
+      if (generateLessonImages) {
+        // Process images asynchronously without blocking the response
+        setImmediate(async () => {
+          try {
+            console.log("=== Starting background lesson image generation for course:", validated.data.course_title);
+            console.log("Modules to process:", validated.data.modules.length);
+            
+            const mediaPlan = await generateCourseMediaPlan(
+              validated.data.course_title, 
+              validated.data.modules
+            );
+            
+            console.log("Media plan generated:", JSON.stringify(mediaPlan, null, 2));
+            
+            let imagesGenerated = 0;
+            let imagesFailed = 0;
+            const maxRetries = 2;
+            
+            for (const modulePlan of mediaPlan) {
+              for (const lessonPlan of modulePlan.lessons) {
+                // Normalize to images array - handle both old format (shouldAddImage/imagePrompt) and new format (images[])
+                const imagePlans = Array.isArray(lessonPlan.images) 
+                  ? lessonPlan.images 
+                  : (lessonPlan as any).shouldAddImage && (lessonPlan as any).imagePrompt 
+                    ? [{ 
+                        imagePrompt: (lessonPlan as any).imagePrompt, 
+                        imageAlt: (lessonPlan as any).imageAlt ?? "", 
+                        placement: (lessonPlan as any).placement ?? 0 
+                      }] 
+                    : [];
+                
+                if (!imagePlans.length) continue;
+                
+                const lessonInfo = createdLessons.find(
+                  l => l.moduleIndex === modulePlan.moduleIndex && l.lessonIndex === lessonPlan.lessonIndex
+                );
+                
+                console.log(`Looking for lesson at module ${modulePlan.moduleIndex}, lesson ${lessonPlan.lessonIndex}:`, lessonInfo ? "found" : "not found");
+                console.log(`Images to generate for this lesson: ${imagePlans.length}`);
+                
+                if (lessonInfo) {
+                  for (const imagePlan of imagePlans) {
+                      let imageUrl: string | null = null;
+                      let attempts = 0;
+                      
+                      // Retry logic for image generation
+                      while (!imageUrl && attempts < maxRetries) {
+                        attempts++;
+                        try {
+                          console.log(`[Attempt ${attempts}/${maxRetries}] Generating image for lesson ${lessonInfo.lessonId} at placement ${imagePlan.placement}...`);
+                          imageUrl = await generateLessonImage(imagePlan.imagePrompt);
+                          
+                          if (!imageUrl && attempts < maxRetries) {
+                            console.log(`Image generation returned null, retrying in 2 seconds...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                          }
+                        } catch (imgError) {
+                          console.error(`Attempt ${attempts} failed for lesson ${lessonInfo.lessonId}:`, imgError);
+                          if (attempts < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                          }
+                        }
+                      }
+                      
+                      if (imageUrl) {
+                        const newMedia = {
+                          id: randomUUID(),
+                          type: "image" as const,
+                          url: imageUrl,
+                          alt: imagePlan.imageAlt || "",
+                          caption: "",
+                          placement: imagePlan.placement ?? 0,
+                          prompt: imagePlan.imagePrompt,
+                        };
+                        await storage.addLessonMedia(lessonInfo.lessonId, newMedia);
+                        imagesGenerated++;
+                        console.log(`Image added to lesson ${lessonInfo.lessonId} at placement ${imagePlan.placement}. Total images: ${imagesGenerated}`);
+                      } else {
+                        imagesFailed++;
+                        console.log(`Failed to generate image for lesson ${lessonInfo.lessonId} after ${maxRetries} attempts`);
+                      }
+                  }
+                }
+              }
+            }
+            
+            console.log(`=== Finished lesson image generation. Success: ${imagesGenerated}, Failed: ${imagesFailed}`);
+            
+            // Update course status to complete
+            await storage.updateCourse(course.id, { generationStatus: "complete" });
+            
+            // Send Whop notification to the admin
+            try {
+              const realCompanyId = await getCompanyIdFromExperience(experienceId);
+              if (realCompanyId) {
+                await sendNotification({
+                  companyId: realCompanyId,
+                  title: "Course Ready!",
+                  content: `Your course "${validated.data.course_title}" has finished generating. All lesson images are now ready.`,
+                  subtitle: `${imagesGenerated} images generated successfully`,
+                  restPath: `${experienceId}/courses/${course.id}/edit`,
+                });
+                console.log("Notification sent to company:", realCompanyId);
+              } else {
+                console.log("Could not get company ID from experience:", experienceId);
+              }
+            } catch (notifyError) {
+              console.error("Failed to send completion notification:", notifyError);
+            }
+            
+          } catch (mediaPlanError) {
+            console.error("Failed to generate media plan:", mediaPlanError);
+            // Update status to complete even if image generation failed
+            await storage.updateCourse(course.id, { generationStatus: "complete" });
+            
+            // Notify admin about the failure
+            try {
+              const realCompanyId = await getCompanyIdFromExperience(experienceId);
+              if (realCompanyId) {
+                await sendNotification({
+                  companyId: realCompanyId,
+                  title: "Course Created",
+                  content: `Your course "${validated.data.course_title}" was created, but some lesson images could not be generated. You can add images manually in the course editor.`,
+                  restPath: `${experienceId}/courses/${course.id}/edit`,
+                });
+              }
+            } catch (notifyError) {
+              console.error("Failed to send failure notification:", notifyError);
+            }
+          }
+        });
+      } else {
+        console.log("Skipping lesson image generation (toggle disabled)");
+      }
+    } catch {
+      
+      res.status(500).json({ error: "Failed to create course" });
+    }
+  });
+
+  app.patch("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.creatorId !== req.user?.id) {
+        return res.status(403).json({ error: "Not your course" });
+      }
+
+      const { title, description, published, isFree, price } = req.body;
+      
+      const updated = await storage.updateCourse(course.id, {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(published !== undefined && { published }),
+        ...(isFree !== undefined && { isFree }),
+        ...(price !== undefined && { price }),
+      });
+
+      res.json(updated);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to update course" });
+    }
+  });
+
+  app.delete("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.creatorId !== req.user?.id) {
+        return res.status(403).json({ error: "Not your course" });
+      }
+
+      await storage.deleteCourse(course.id);
+      res.json({ success: true });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to delete course" });
+    }
+  });
+
+  app.get("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      const course = await storage.getCourseWithModules(req.params.courseId);
+      
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      const accessRecord = req.user && await storage.getCourseAccess(course.id, req.user.id);
+
+      // If course is unpublished, only allow users who already have access (paid/enrolled)
+      if (!course.published && !accessRecord) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (!accessRecord) {
+        return res.status(403).json({ 
+          error: course.isFree ? "Enrollment required" : "Purchase required",
+          course: {
+            id: course.id,
+            title: course.title,
+            description: course.description,
+            price: course.price,
+            isFree: course.isFree,
+            moduleCount: course.modules.length,
+            lessonCount: course.modules.reduce((acc, m) => acc + m.lessons.length, 0),
+          }
+        });
+      }
+
+      res.json(course);
+    } catch {
+      
+      res.status(500).json({ error: "Failed to get course" });
+    }
+  });
+
+  app.post("/api/experiences/:experienceId/courses/:courseId/access", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.isFree) {
+        const existing = await storage.getCourseAccess(course.id, req.user.id);
+        if (!existing) {
+          await storage.grantCourseAccess({
+            courseId: course.id,
+            userId: req.user.id,
+            purchasedViaWhop: false,
+          });
+        }
+        return res.json({ success: true, accessGranted: true });
+      }
+
+      res.json({ 
+        success: false, 
+        requiresPurchase: true,
+        price: course.price 
+      });
+    } catch {
+      
+      res.status(500).json({ error: "Failed to grant access" });
+    }
+  });
+
+  interface WordTiming {
+    word: string;
+    startTime: number;
+    endTime: number;
+  }
+  
+  const ttsCache = new Map<string, { 
+    audioBase64: string; 
+    duration: number; 
+    wordTimings: WordTiming[];
+    timestamp: number;
+  }>();
+  const TTS_CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
+  app.post("/api/experiences/:experienceId/lessons/:lessonId/tts", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      const lesson = await storage.getLesson(req.params.lessonId);
+      
+      if (!lesson) {
+        return res.status(404).json({ error: "Lesson not found" });
+      }
+
+      const cacheKey = `${req.params.lessonId}-${req.body.voiceId || 'default'}`;
+      const cached = ttsCache.get(cacheKey);
+      
+      if (cached && Date.now() - cached.timestamp < TTS_CACHE_TTL) {
+        return res.json({ 
+          audioBase64: cached.audioBase64, 
+          duration: cached.duration,
+          wordTimings: cached.wordTimings,
+        });
+      }
+
+      const ttsResult = await generateTTS({
+        text: lesson.content,
+        voiceId: req.body.voiceId,
+      });
+
+      ttsCache.set(cacheKey, {
+        audioBase64: ttsResult.audioBase64,
+        duration: ttsResult.duration,
+        wordTimings: ttsResult.wordTimings,
+        timestamp: Date.now(),
+      });
+
+      res.json(ttsResult);
+    } catch (error: any) {
+      console.error("TTS generation error:", error);
+      res.status(500).json({ error: error.message || "Failed to generate TTS" });
+    }
+  });
+
+  // Create checkout for paid course
+  app.post("/api/experiences/:experienceId/courses/:courseId/checkout", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const course = await storage.getCourse(req.params.courseId);
+      if (!course) {
+        return res.status(404).json({ error: "Course not found" });
+      }
+
+      if (course.isFree) {
+        return res.status(400).json({ error: "This course is free, use the access endpoint instead" });
+      }
+
+      // Check if already has access
+      const existing = await storage.getCourseAccess(course.id, req.user.id);
+      if (existing) {
+        return res.status(400).json({ error: "You already have access to this course" });
+      }
+
+      const checkoutResult = await createCheckoutConfiguration(
+        parseFloat(course.price || "0"),
+        {
+          courseId: course.id,
+          buyerId: req.user.id,
+          creatorId: course.creatorId,
+        }
+      );
+
+      if (!checkoutResult) {
+        return res.status(500).json({ error: "Failed to create checkout" });
+      }
+
+      // Store the payment record
+      await storage.createPayment({
+        courseId: course.id,
+        buyerId: req.user.id,
+        creatorId: course.creatorId,
+        amount: course.price || "0",
+        whopCheckoutId: checkoutResult.checkoutId,
+        status: "pending",
+      });
+
+      res.json({ checkoutId: checkoutResult.checkoutId });
+    } catch (error) {
+      console.error("Checkout creation error:", error);
+      res.status(500).json({ error: "Failed to create checkout" });
+    }
+  });
+
+  // Payment verification endpoint (Option 2 - called from frontend onComplete)
+  app.post("/api/payments/:checkoutId/verify", authenticateWhop, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const { checkoutId } = req.params;
+      const { paymentId } = req.body;
+
+      // Look up the payment record we created
+      const payment = await storage.getPaymentByCheckoutId(checkoutId);
+      
+      if (!payment) {
+        return res.status(404).json({ error: "Payment record not found" });
+      }
+
+      // Verify the payment belongs to this user
+      if (payment.buyerId !== req.user.id) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+
+      // If already completed, return success
+      if (payment.status === "completed") {
+        return res.json({ success: true, message: "Payment already processed" });
+      }
+
+      // The onComplete callback from Whop is triggered when payment succeeds
+      // So if we reach here with a paymentId, the payment was successful
+      if (paymentId) {
+        // Grant course access
+        const existing = await storage.getCourseAccess(payment.courseId, payment.buyerId);
+        if (!existing) {
+          await storage.grantCourseAccess({
+            courseId: payment.courseId,
+            userId: payment.buyerId,
+            purchasedViaWhop: true,
+          });
+        }
+
+        // Update payment status
+        await storage.updatePaymentStatus(payment.id, "completed", paymentId);
+
+        // Add creator earnings (70% to creator, 30% platform fee)
+        // TODO: Platform fee percentage can be made configurable in the future
+        const CREATOR_PERCENTAGE = 0.70; // Creator gets 70%, platform keeps 30%
+        const totalAmount = parseFloat(payment.amount || "0");
+        const creatorEarnings = totalAmount * CREATOR_PERCENTAGE;
+        await storage.addCreatorEarnings(payment.creatorId, creatorEarnings);
+        
+        console.log(`Payment verified and completed: course ${payment.courseId} for buyer ${payment.buyerId}, creator earnings: $${creatorEarnings.toFixed(2)} (70% of $${totalAmount.toFixed(2)})`);
+        return res.json({ success: true, message: "Payment verified and access granted" });
+      }
+
+      // Fallback: verify payment status with Whop API
+      const verifyResult = await verifyPaymentComplete(checkoutId);
+      
+      if (verifyResult.success) {
+        // Grant course access
+        const existing = await storage.getCourseAccess(payment.courseId, payment.buyerId);
+        if (!existing) {
+          await storage.grantCourseAccess({
+            courseId: payment.courseId,
+            userId: payment.buyerId,
+            purchasedViaWhop: true,
+          });
+        }
+
+        // Update payment status
+        await storage.updatePaymentStatus(payment.id, "completed", verifyResult.paymentId);
+
+        // Add creator earnings (70% to creator, 30% platform fee)
+        // TODO: Platform fee percentage can be made configurable in the future
+        const CREATOR_PERCENTAGE_API = 0.70; // Creator gets 70%, platform keeps 30%
+        const totalAmountApi = parseFloat(payment.amount || "0");
+        const creatorEarningsApi = totalAmountApi * CREATOR_PERCENTAGE_API;
+        await storage.addCreatorEarnings(payment.creatorId, creatorEarningsApi);
+        
+        console.log(`Payment verified via API: course ${payment.courseId} for buyer ${payment.buyerId}, creator earnings: $${creatorEarningsApi.toFixed(2)} (70% of $${totalAmountApi.toFixed(2)})`);
+        return res.json({ success: true, message: "Payment verified and access granted" });
+      }
+
+      return res.status(400).json({ error: "Payment not yet completed" });
+    } catch (error) {
+      console.error("Payment verification error:", error);
+      res.status(500).json({ error: "Failed to verify payment" });
+    }
+  });
+
+  return httpServer;
+}

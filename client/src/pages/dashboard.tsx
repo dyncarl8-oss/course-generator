@@ -230,11 +230,12 @@ export default function DashboardPage() {
 
   return (
     <div className="h-full bg-background flex flex-col">
-      <Header 
+      <Header
         showHowItWorks={() => setShowHowItWorks(true)}
         availableBalance={stats.availableBalance}
         showWithdrawDialog={() => setShowWithdrawDialog(true)}
         onCreateCourse={() => setActiveTab("create")}
+        showBranding={false}
       />
 
       <div className="flex-1 overflow-auto p-5 space-y-5">

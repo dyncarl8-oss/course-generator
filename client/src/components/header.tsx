@@ -1,6 +1,5 @@
 import { Link } from "wouter";
 import { BookOpen, HelpCircle, Plus, Wallet } from "lucide-react";
-import { UserMenu } from "./user-menu";
 import { Button } from "@/components/ui/button";
 
 interface HeaderProps {
@@ -9,6 +8,7 @@ interface HeaderProps {
   showWithdrawDialog?: () => void;
   onCreateCourse?: () => void;
   children?: React.ReactNode;
+  showBranding?: boolean;
 }
 
 export function Header({ 
@@ -16,18 +16,21 @@ export function Header({
   availableBalance, 
   showWithdrawDialog, 
   onCreateCourse,
-  children
+  children,
+  showBranding = true
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-14 items-center justify-between gap-4 px-5">
         <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2" data-testid="link-home">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <BookOpen className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <h1 className="font-semibold">Course Builder</h1>
-          </Link>
+          {showBranding && (
+            <Link href="/" className="flex items-center gap-2" data-testid="link-home">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                <BookOpen className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <h1 className="font-semibold">Course Builder</h1>
+            </Link>
+          )}
           {showHowItWorks && (
             <Button 
               variant="ghost"
@@ -66,9 +69,6 @@ export function Header({
               Create Course
             </Button>
           )}
-          <div className="ml-2 border-l pl-4 h-8 flex items-center">
-            <UserMenu />
-          </div>
         </div>
       </div>
     </header>

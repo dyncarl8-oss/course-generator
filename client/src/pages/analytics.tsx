@@ -11,6 +11,8 @@ import {
   Calendar, BarChart3, ChevronRight 
 } from "lucide-react";
 import { useState } from "react";
+import { Header } from "@/components/header";
+import { useToast } from "@/hooks/use-toast";
 import type { Course } from "@shared/schema";
 
 interface DashboardData {
@@ -35,6 +37,7 @@ interface AnalyticsData {
 export default function AnalyticsPage() {
   const { companyId } = useParams<{ companyId: string }>();
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const { data: dashboardData, isLoading: dashboardLoading } = useQuery<DashboardData>({
     queryKey: ["/api/dashboard", companyId],
@@ -45,6 +48,11 @@ export default function AnalyticsPage() {
     queryKey: ["/api/dashboard", companyId, "courses", selectedCourseId, "analytics"],
     enabled: !!companyId && !!selectedCourseId,
   });
+
+  const handleBackToDashboard = () => {
+    // The Link component handles navigation
+    // This function exists to show intent and provide consistent pattern
+  };
 
   if (dashboardLoading) {
     return (
@@ -70,16 +78,21 @@ export default function AnalyticsPage() {
 
   return (
     <div className="h-full bg-background flex flex-col">
-      <div className="border-b bg-background shrink-0">
-        <div className="flex h-14 items-center px-5 gap-4">
-          <Button variant="ghost" size="icon" asChild data-testid="button-back">
-            <Link href={`/dashboard/${companyId}`}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="font-semibold">Analytics</h1>
-          </div>
+      <Header
+        companyId={companyId}
+        showWithdrawButton={true}
+        apiBasePath={`/api/dashboard/${companyId}`}
+      />
+      
+      <div className="flex items-center px-6 py-3 border-b bg-background">
+        <Button variant="ghost" size="sm" asChild data-testid="button-back">
+          <Link href={`/dashboard/${companyId}`}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Dashboard
+          </Link>
+        </Button>
+        <div className="ml-3">
+          <h1 className="font-semibold text-lg">Analytics</h1>
         </div>
       </div>
 

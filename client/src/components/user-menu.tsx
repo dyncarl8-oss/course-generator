@@ -11,7 +11,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, LogOut, Settings, BookOpen, LayoutDashboard } from "lucide-react";
 import { Link } from "wouter";
 
-export function UserMenu() {
+interface UserMenuProps {
+  companyId?: string;
+}
+
+export function UserMenu({ companyId }: UserMenuProps) {
   const { user, logout, isAuthenticated, login } = useAuth();
 
   if (!isAuthenticated) {
@@ -53,13 +57,13 @@ export function UserMenu() {
         {user?.role === "creator" ? (
           <>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer" data-testid="link-dashboard">
+              <Link href={companyId ? `/dashboard/${companyId}` : "/dashboard"} className="flex items-center gap-2 cursor-pointer" data-testid="link-dashboard">
                 <LayoutDashboard className="h-4 w-4" />
                 Creator Dashboard
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/analytics" className="flex items-center gap-2 cursor-pointer" data-testid="link-analytics">
+              <Link href={companyId ? `/dashboard/${companyId}/analytics` : "/analytics"} className="flex items-center gap-2 cursor-pointer" data-testid="link-analytics">
                 <Settings className="h-4 w-4" />
                 Analytics
               </Link>

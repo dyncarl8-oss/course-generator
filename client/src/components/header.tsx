@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { BookOpen, HelpCircle, Plus, Wallet } from "lucide-react";
 import { UserMenu } from "./user-menu";
 import { WithdrawRequestDialog } from "./withdraw-request-dialog";
@@ -43,6 +43,9 @@ export function Header({
 
   const availableBalance = dashboardData?.earnings?.availableBalance || 0;
 
+  const params = useParams<{ companyId: string }>();
+  const headerCompanyId = companyId || params.companyId;
+
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -82,7 +85,7 @@ export function Header({
                 Create Course
               </Button>
             )}
-            <UserMenu />
+            <UserMenu companyId={headerCompanyId} />
           </div>
         </div>
       </header>

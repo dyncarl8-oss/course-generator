@@ -31,6 +31,8 @@ export function WithdrawRequestDialog({
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const availableBalanceNumber = Number(availableBalance) || 0;
+
   const withdrawMutation = useMutation({
     mutationFn: async () => {
       const endpoint = apiBasePath
@@ -39,9 +41,13 @@ export function WithdrawRequestDialog({
       return apiRequest("POST", endpoint, {});
     },
     onSuccess: (data) => {
+      const amount = Number(data?.amount) || 0;
       toast({
         title: "Withdraw Request Sent",
-        description: `Your request for $${data.amount.toFixed(2)} has been submitted. You'll receive payment manually to your Whop account.`,
+        description:
+          "Your request for $" +
+          amount.toFixed(2) +
+          " has been submitted. You'll receive payment manually to your Whop account.",
       });
       onOpenChange(false);
     },
@@ -78,7 +84,7 @@ export function WithdrawRequestDialog({
           </div>
           <div className="text-center">
             <p className="text-sm text-muted-foreground mb-2">Available Balance</p>
-            <p className="text-3xl font-bold">${availableBalance.toFixed(2)}</p>
+            <p className="text-3xl font-bold">${availableBalanceNumber.toFixed(2)}</p>
           </div>
         </div>
 
@@ -99,7 +105,7 @@ export function WithdrawRequestDialog({
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting || availableBalance <= 0}
+            disabled={isSubmitting || availableBalanceNumber <= 0}
             className="w-full sm:w-auto"
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

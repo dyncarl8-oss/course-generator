@@ -238,8 +238,8 @@ export default function DashboardPage() {
     totalCourses: data?.courses.length || 0,
     publishedCourses: data?.courses.filter((c) => c.published).length || 0,
     totalStudents: data?.courses.reduce((acc, c) => acc + c.studentCount, 0) || 0,
-    totalEarnings: data?.earnings?.totalEarnings || 0,
-    availableBalance: data?.earnings?.availableBalance || 0,
+    totalEarnings: Number(data?.earnings?.totalEarnings ?? 0) || 0,
+    availableBalance: Number(data?.earnings?.availableBalance ?? 0) || 0,
   };
 
   return (
@@ -335,7 +335,7 @@ export default function DashboardPage() {
 interface StatCardProps {
   icon: typeof BookOpen;
   label: string;
-  value: number;
+  value: number | string | null | undefined;
   testId: string;
   bgColor?: string;
   iconColor?: string;
@@ -343,7 +343,8 @@ interface StatCardProps {
 }
 
 function StatCard({ icon: Icon, label, value, testId, bgColor = "bg-primary/10", iconColor = "text-primary", isCurrency }: StatCardProps) {
-  const displayValue = isCurrency ? `$${value.toFixed(2)}` : value;
+  const numericValue = Number(value) || 0;
+  const displayValue = isCurrency ? "$" + numericValue.toFixed(2) : numericValue;
   return (
     <Card data-testid={testId}>
       <CardContent className="p-5">

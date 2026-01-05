@@ -39,6 +39,8 @@ export function CourseBuilderHeader({
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
 
+  const availableBalanceNumber = Number(availableBalance) || 0;
+
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -88,11 +90,11 @@ export function CourseBuilderHeader({
               onClick={() => setShowWithdrawDialog(true)}
               data-testid="button-withdraw"
               className="gap-2"
-              disabled={availableBalance <= 0}
+              disabled={availableBalanceNumber <= 0}
             >
               <Wallet className="h-4 w-4" />
               <span className="hidden sm:inline">Withdraw</span>
-              <span className="font-semibold">${availableBalance.toFixed(2)}</span>
+              <span className="font-semibold">${availableBalanceNumber.toFixed(2)}</span>
             </Button>
             <Button asChild data-testid="button-create-course">
               <Link href={`/dashboard/${companyId}?tab=create`}>
@@ -211,7 +213,7 @@ export function CourseBuilderHeader({
         open={showWithdrawDialog}
         onOpenChange={setShowWithdrawDialog}
         companyId={companyId}
-        availableBalance={availableBalance}
+        availableBalance={availableBalanceNumber}
       />
     </>
   );

@@ -20,29 +20,20 @@ export function Header() {
           {isAuthenticated && user?.role === "creator" && (
             <>
               <Link
-                href="/dashboard"
+                href={user.whopCompanyId ? `/dashboard/${user.whopCompanyId}` : "/dashboard"}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 data-testid="nav-dashboard"
               >
                 Dashboard
               </Link>
               <Link
-                href="/analytics"
+                href={user.whopCompanyId ? `/dashboard/${user.whopCompanyId}/analytics` : "/analytics"}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                 data-testid="nav-analytics"
               >
                 Analytics
               </Link>
             </>
-          )}
-          {isAuthenticated && user?.role === "member" && (
-            <Link
-              href="/library"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              data-testid="nav-library"
-            >
-              My Courses
-            </Link>
           )}
         </nav>
 

@@ -802,15 +802,29 @@ export async function registerRoutes(
   app.get("/api/experiences/:experienceId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
     try {
       const isAdmin = req.accessLevel === "admin";
-      
+
       if (isAdmin && req.user) {
         // Admin view - show all courses with management stats
-        if (req.user.role !== "creator") {
+        // Set the admin's company ID if not already set
+        const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+        if (companyId && !req.user.whopCompanyId) {
+          await storage.updateUser(req.user.id, { 
+            role: "creator", 
+            whopCompanyId: companyId 
+          });
+          req.user = await storage.getUser(req.user.id);
+        } else if (req.user.role !== "creator") {
           await storage.updateUser(req.user.id, { role: "creator" });
           req.user = await storage.getUser(req.user.id);
         }
-        
-        const courses = await storage.getCoursesByCreator(req.user.id);
+
+        // Re-assert user exists for TypeScript after the conditional blocks
+        if (!req.user) {
+          return res.status(401).json({ error: "User not found" });
+        }
+
+        const userId = req.user.id;
+        const courses = await storage.getCoursesByCreator(userId);
         const coursesWithStats = await Promise.all(
           courses.map(async (course) => {
             const courseWithModules = await storage.getCourseWithModules(course.id);
@@ -826,14 +840,22 @@ export async function registerRoutes(
         );
 
         // Get creator earnings
-        const earnings = await storage.getCreatorEarnings(req.user.id);
+        const earnings = await storage.getCreatorEarnings(userId);
 
         res.json({
           user: req.user,
           courses: coursesWithStats,
           experienceId: req.params.experienceId,
           accessLevel: req.accessLevel,
-          earnings: earnings ? { totalEarnings: earnings.totalEarnings } : { totalEarnings: "0" },
+          earnings: earnings ? { 
+            totalEarnings: earnings.totalEarnings,
+            availableBalance: earnings.availableBalance,
+            pendingBalance: earnings.pendingBalance 
+          } : { 
+            totalEarnings: "0",
+            availableBalance: 0,
+            pendingBalance: 0 
+          },
         });
       } else {
         // Customer view - show published courses + unpublished courses user has access to
@@ -952,6 +974,45 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/experiences/:experienceId/withdraw-request", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const earnings = await storage.getCreatorEarnings(req.user.id);
+      
+      if (!earnings || earnings.availableBalance <= 0) {
+        return res.status(400).json({ error: "No available balance to withdraw" });
+      }
+
+      const adminName = req.user.username || req.user.email || "Unknown Admin";
+      
+      await sendWithdrawRequestEmail({
+        adminName,
+        adminEmail: req.user.email,
+        adminUsername: req.user.username,
+        whopUserId: req.user.whopUserId,
+        amount: earnings.availableBalance,
+        availableBalance: earnings.availableBalance,
+        totalEarnings: earnings.totalEarnings,
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Withdraw request sent successfully",
+        amount: earnings.availableBalance,
+      });
+    } catch (error) {
+      console.error("Failed to process withdraw request:", error);
+      res.status(500).json({ error: "Failed to send withdraw request" });
+    }
+  });
+
   app.post("/api/experiences/:experienceId/courses", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
     try {
       if (req.accessLevel !== "admin") {
@@ -962,9 +1023,13 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
-      // Ensure user is marked as creator
-      if (req.user.role !== "creator") {
-        await storage.updateUser(req.user.id, { role: "creator" });
+      // Ensure user is marked as creator and has company ID set
+      const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+      if (companyId && (!req.user.whopCompanyId || req.user.role !== "creator")) {
+        await storage.updateUser(req.user.id, { 
+          role: "creator",
+          whopCompanyId: companyId 
+        });
         req.user = await storage.getUser(req.user.id);
       }
 

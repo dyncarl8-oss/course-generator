@@ -18,11 +18,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
+import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   BookOpen, Lock, Unlock, ChevronRight, 
   Sparkles, Plus, Users, TrendingUp, FileText, LayoutGrid,
-  Info, CheckCircle, Layers, Loader2, CreditCard, DollarSign, HelpCircle, CheckCircle2
+  Info, CheckCircle, Layers, Loader2, CreditCard, DollarSign, HelpCircle, CheckCircle2, Wallet
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -36,7 +37,7 @@ interface ExperienceData {
   courses: (Course & { moduleCount: number; lessonCount: number; hasAccess: boolean; studentCount?: number })[];
   experienceId: string;
   accessLevel: "admin" | "customer" | "no_access";
-  earnings?: { totalEarnings: string };
+  earnings?: { totalEarnings: string; availableBalance: number; pendingBalance: number };
 }
 
 export default function ExperiencePage() {
@@ -52,6 +53,7 @@ export default function ExperiencePage() {
   const [enrolledCourseName, setEnrolledCourseName] = useState("");
   const [publishingCourseId, setPublishingCourseId] = useState<string | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const createTabRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -281,6 +283,7 @@ export default function ExperiencePage() {
       publishedCourses: data?.courses.filter((c) => c.published).length || 0,
       totalStudents: data?.courses.reduce((acc, c) => acc + (c.studentCount || 0), 0) || 0,
       totalEarnings: parseFloat(data?.earnings?.totalEarnings || "0"),
+      availableBalance: data?.earnings?.availableBalance || 0,
     };
 
     return (
@@ -302,18 +305,19 @@ export default function ExperiencePage() {
                 <HelpCircle className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 hidden sm:flex">
-                <Avatar className="h-7 w-7">
-                  <AvatarImage src={data?.user.profilePicUrl || undefined} alt={data?.user.username || "User"} />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                    {(data?.user.username || data?.user.email || "U").slice(0, 2).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm text-muted-foreground">
-                  {data?.user.username}
-                </span>
-              </div>
+            <div className="flex items-center gap-2">
+              {stats.availableBalance > 0 && (
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowWithdrawDialog(true)}
+                  data-testid="button-withdraw"
+                  className="gap-2"
+                >
+                  <Wallet className="h-4 w-4" />
+                  <span className="hidden sm:inline">Withdraw</span>
+                  <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
+                </Button>
+              )}
               <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
                 <Plus className="h-4 w-4 mr-2" />
                 New Course
@@ -517,6 +521,14 @@ export default function ExperiencePage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <WithdrawRequestDialog
+          open={showWithdrawDialog}
+          onOpenChange={setShowWithdrawDialog}
+          companyId={experienceId || ""}
+          availableBalance={stats.availableBalance}
+          apiBasePath={`/api/experiences/${experienceId}`}
+        />
       </div>
     );
   }

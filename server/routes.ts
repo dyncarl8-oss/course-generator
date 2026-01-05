@@ -793,7 +793,13 @@ export async function registerRoutes(
         });
       } else {
         // Customer view - show published courses + unpublished courses user has access to
-        const publishedCourses = await storage.getPublishedCourses();
+        // Only show courses from this admin's company, not from all admins
+        const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+        if (!companyId) {
+          return res.status(400).json({ error: "Invalid experience" });
+        }
+        
+        const publishedCourses = await storage.getPublishedCoursesByCompany(companyId);
         
         // Get courses user has access to (including unpublished ones they already paid for)
         const userAccessRecords = req.user ? await storage.getCourseAccessByUser(req.user.id) : [];

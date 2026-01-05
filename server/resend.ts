@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resendApiKey = process.env.RESEND_API_KEY;
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 export async function sendWithdrawRequestEmail(params: {
   adminName: string;
@@ -16,8 +17,9 @@ export async function sendWithdrawRequestEmail(params: {
   const notificationEmail = process.env.NOTIFICATION_EMAIL;
   const fromEmail = process.env.RESEND_FROM_EMAIL;
   
-  if (!notificationEmail || !fromEmail) {
-    throw new Error("Email configuration is missing");
+  if (!resend || !notificationEmail || !fromEmail) {
+    console.warn("Email configuration is missing. Skipping email notification.");
+    return null;
   }
 
   const emailContent = `

@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Header } from "@/components/header";
 import { 
   ArrowLeft, Users, BookOpen, TrendingUp, 
   Calendar, BarChart3, ChevronRight 
@@ -69,19 +70,21 @@ export default function AnalyticsPage() {
   const publishedCourses = courses.filter((c) => c.published).length;
 
   return (
-    <div className="h-full bg-background flex flex-col">
-      <div className="border-b bg-background shrink-0">
-        <div className="flex h-14 items-center px-5 gap-4">
-          <Button variant="ghost" size="icon" asChild data-testid="button-back">
-            <Link href={`/dashboard/${companyId}`}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <div>
-            <h1 className="font-semibold">Analytics</h1>
+    <>
+      <Header />
+      <div className="h-full bg-background flex flex-col">
+        <div className="border-b bg-background shrink-0">
+          <div className="flex h-14 items-center px-5 gap-4">
+            <Button variant="ghost" size="icon" asChild data-testid="button-back">
+              <Link href={`/dashboard/${companyId}`}>
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div>
+              <h1 className="font-semibold">Analytics</h1>
+            </div>
           </div>
         </div>
-      </div>
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <div className="grid grid-cols-3 gap-4">
@@ -262,6 +265,7 @@ export default function AnalyticsPage() {
           </Card>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

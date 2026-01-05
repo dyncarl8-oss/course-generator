@@ -6,6 +6,7 @@ import { generateCourse, regenerateModule, regenerateLesson, generateCourseImage
 import { generateTTS } from "./tts";
 import { generatedCourseSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { sendWithdrawRequestEmail } from "./resend";
 
 interface AuthenticatedRequest extends Request {
   whopUserId?: string;
@@ -140,11 +141,54 @@ export async function registerRoutes(
         user: req.user,
         courses: coursesWithStats,
         companyId: req.params.companyId,
-        earnings: earnings ? { totalEarnings: earnings.totalEarnings } : { totalEarnings: "0" },
+        earnings: earnings ? { 
+          totalEarnings: earnings.totalEarnings, 
+          availableBalance: earnings.availableBalance,
+          pendingBalance: earnings.pendingBalance 
+        } : { 
+          totalEarnings: 0, 
+          availableBalance: 0,
+          pendingBalance: 0 
+        },
       });
     } catch {
       
       res.status(500).json({ error: "Failed to load dashboard" });
+    }
+  });
+
+  app.post("/api/dashboard/:companyId/withdraw-request", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      const earnings = await storage.getCreatorEarnings(req.user.id);
+      
+      if (!earnings || earnings.availableBalance <= 0) {
+        return res.status(400).json({ error: "No available balance to withdraw" });
+      }
+
+      const adminName = req.user.username || req.user.email || "Unknown Admin";
+      
+      await sendWithdrawRequestEmail({
+        adminName,
+        adminEmail: req.user.email,
+        adminUsername: req.user.username,
+        whopUserId: req.user.whopUserId,
+        amount: earnings.availableBalance,
+        availableBalance: earnings.availableBalance,
+        totalEarnings: earnings.totalEarnings,
+      });
+
+      res.json({ 
+        success: true, 
+        message: "Withdraw request sent successfully",
+        amount: earnings.availableBalance,
+      });
+    } catch (error) {
+      console.error("Failed to process withdraw request:", error);
+      res.status(500).json({ error: "Failed to send withdraw request" });
     }
   });
 

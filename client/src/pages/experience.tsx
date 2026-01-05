@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
 import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
+import { Header } from "@/components/header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   BookOpen, Lock, Unlock, ChevronRight, 
@@ -288,43 +289,12 @@ export default function ExperiencePage() {
 
     return (
       <div className="h-full bg-background flex flex-col">
-        <header className="border-b bg-background shrink-0">
-          <div className="h-14 px-5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-                <BookOpen className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <h1 className="font-semibold">Course Builder</h1>
-              <Button 
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowHowItWorks(true)}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground ml-1"
-                data-testid="button-how-it-works"
-              >
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex items-center gap-2">
-              {stats.availableBalance > 0 && (
-                <Button 
-                  variant="outline"
-                  onClick={() => setShowWithdrawDialog(true)}
-                  data-testid="button-withdraw"
-                  className="gap-2"
-                >
-                  <Wallet className="h-4 w-4" />
-                  <span className="hidden sm:inline">Withdraw</span>
-                  <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
-                </Button>
-              )}
-              <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
-                <Plus className="h-4 w-4 mr-2" />
-                New Course
-              </Button>
-            </div>
-          </div>
-        </header>
+        <Header 
+          showHowItWorks={() => setShowHowItWorks(true)}
+          availableBalance={stats.availableBalance}
+          showWithdrawDialog={() => setShowWithdrawDialog(true)}
+          onCreateCourse={() => setActiveTab("create")}
+        />
 
         <main className="flex-1 overflow-auto p-5 space-y-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -538,29 +508,7 @@ export default function ExperiencePage() {
 
   return (
     <div className="h-full bg-background flex flex-col">
-      <header className="border-b bg-background shrink-0">
-        <div className="h-14 px-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <BookOpen className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <h1 className="font-semibold">Course Library</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 hidden sm:flex">
-              <Avatar className="h-7 w-7">
-                <AvatarImage src={data?.user.profilePicUrl || undefined} alt={data?.user.username || "User"} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {(data?.user.username || data?.user.email || "U").slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm text-muted-foreground">
-                {data?.user.username}
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="flex-1 overflow-auto p-5 space-y-5">
         <Tabs value={memberTab} onValueChange={setMemberTab}>

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { Course } from "@shared/schema";
+import { Header } from "@/components/header";
 
 interface DashboardData {
   user: { id: string; username: string; email: string };
@@ -70,18 +71,16 @@ export default function AnalyticsPage() {
 
   return (
     <div className="h-full bg-background flex flex-col">
-      <div className="border-b bg-background shrink-0">
-        <div className="flex h-14 items-center px-5 gap-4">
+      <Header>
+        <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild data-testid="button-back">
             <Link href={`/dashboard/${companyId}`}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <div>
-            <h1 className="font-semibold">Analytics</h1>
-          </div>
+          <h1 className="font-semibold">Analytics</h1>
         </div>
-      </div>
+      </Header>
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <div className="grid grid-cols-3 gap-4">

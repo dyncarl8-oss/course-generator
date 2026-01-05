@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
 import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
+import { Header } from "@/components/header";
 import { 
   Plus, BookOpen, Users, TrendingUp, 
   Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet
@@ -229,43 +230,12 @@ export default function DashboardPage() {
 
   return (
     <div className="h-full bg-background flex flex-col">
-      <div className="border-b bg-background shrink-0">
-        <div className="flex h-14 items-center justify-between px-5">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <BookOpen className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <h1 className="font-semibold">Course Builder</h1>
-            <Button 
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowHowItWorks(true)}
-              className="h-6 w-6 text-muted-foreground hover:text-foreground ml-1"
-              data-testid="button-how-it-works"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            {stats.availableBalance > 0 && (
-              <Button 
-                variant="outline"
-                onClick={() => setShowWithdrawDialog(true)}
-                data-testid="button-withdraw"
-                className="gap-2"
-              >
-                <Wallet className="h-4 w-4" />
-                <span className="hidden sm:inline">Withdraw</span>
-                <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
-              </Button>
-            )}
-            <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Course
-            </Button>
-          </div>
-        </div>
-      </div>
+      <Header 
+        showHowItWorks={() => setShowHowItWorks(true)}
+        availableBalance={stats.availableBalance}
+        showWithdrawDialog={() => setShowWithdrawDialog(true)}
+        onCreateCourse={() => setActiveTab("create")}
+      />
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

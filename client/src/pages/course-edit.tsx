@@ -76,6 +76,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { Header } from "@/components/header";
 import type { CourseWithModules, MediaItem } from "@shared/schema";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateCourseImage } from "@/lib/image-generator";
@@ -649,85 +650,82 @@ export default function CourseEditPage() {
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Minimal Header */}
-      <header className="h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
-        <div className="h-full px-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" asChild className="shrink-0" data-testid="button-back">
-              <Link href={`/dashboard/${companyId}`}>
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Separator orientation="vertical" className="h-6" />
-            <nav className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0 flex-1">
-              <span className="shrink-0">Courses</span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-medium text-foreground truncate">{course.title}</span>
-            </nav>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Badge 
-              className={course.published 
-                ? "bg-green-500/90 text-white" 
-                : "bg-amber-500/90 text-white"}
-            >
-              {course.published ? "Live" : "Draft"}
-            </Badge>
-            <Separator orientation="vertical" className="h-5" />
-            {course.published ? (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    size="sm"
-                    className="bg-amber-600 hover:bg-amber-700 text-white"
-                    disabled={isSaving}
-                    data-testid="button-toggle-publish"
-                  >
-                    {updateCourseMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <EyeOff className="h-4 w-4 mr-1.5" />
-                    )}
-                    Unpublish
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Unpublish this course?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will hide the course from new students. Existing students who already have access will still be able to view the course.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => updateCourseMutation.mutate({ published: false })}
-                      className="bg-amber-600 hover:bg-amber-700"
-                    >
-                      Unpublish
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : (
-              <Button
-                size="sm"
-                className="bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => updateCourseMutation.mutate({ published: true })}
-                disabled={isSaving}
-                data-testid="button-toggle-publish"
-              >
-                {updateCourseMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Eye className="h-4 w-4 mr-1.5" />
-                )}
-                Publish
-              </Button>
-            )}
-          </div>
+      <Header>
+        <div className="flex items-center gap-3 min-w-0">
+          <Button variant="ghost" size="icon" asChild className="shrink-0" data-testid="button-back">
+            <Link href={`/dashboard/${companyId}`}>
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Separator orientation="vertical" className="h-6" />
+          <nav className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0 flex-1">
+            <span className="shrink-0">Courses</span>
+            <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-medium text-foreground truncate">{course.title}</span>
+          </nav>
         </div>
-      </header>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge 
+            className={course.published 
+              ? "bg-green-500/90 text-white" 
+              : "bg-amber-500/90 text-white"}
+          >
+            {course.published ? "Live" : "Draft"}
+          </Badge>
+          <Separator orientation="vertical" className="h-5" />
+          {course.published ? (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                  disabled={isSaving}
+                  data-testid="button-toggle-publish"
+                >
+                  {updateCourseMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <EyeOff className="h-4 w-4 mr-1.5" />
+                  )}
+                  Unpublish
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Unpublish this course?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will hide the course from new students. Existing students who already have access will still be able to view the course.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => updateCourseMutation.mutate({ published: false })}
+                    className="bg-amber-600 hover:bg-amber-700"
+                  >
+                    Unpublish
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => updateCourseMutation.mutate({ published: true })}
+              disabled={isSaving}
+              data-testid="button-toggle-publish"
+            >
+              {updateCourseMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Eye className="h-4 w-4 mr-1.5" />
+              )}
+              Publish
+            </Button>
+          )}
+        </div>
+      </Header>
 
       {/* Main Content with Sidebar */}
       <SidebarProvider defaultOpen={true} style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>

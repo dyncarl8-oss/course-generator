@@ -9,9 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
+import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
 import { 
   Plus, BookOpen, Users, TrendingUp, 
-  Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2
+  Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +23,11 @@ interface DashboardData {
   user: { id: string; username: string; email: string };
   courses: (Course & { moduleCount: number; lessonCount: number; studentCount: number })[];
   companyId: string;
-  earnings: { totalEarnings: string };
+  earnings: { 
+    totalEarnings: number; 
+    availableBalance: number;
+    pendingBalance: number;
+  };
 }
 
 export default function DashboardPage() {
@@ -31,6 +36,7 @@ export default function DashboardPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedCourse, setGeneratedCourse] = useState<GeneratedCourse | null>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const { toast } = useToast();
 
   // Check if any courses are still generating to enable polling
@@ -217,7 +223,8 @@ export default function DashboardPage() {
     totalCourses: data?.courses.length || 0,
     publishedCourses: data?.courses.filter((c) => c.published).length || 0,
     totalStudents: data?.courses.reduce((acc, c) => acc + c.studentCount, 0) || 0,
-    totalEarnings: parseFloat(data?.earnings?.totalEarnings || "0"),
+    totalEarnings: data?.earnings?.totalEarnings || 0,
+    availableBalance: data?.earnings?.availableBalance || 0,
   };
 
   return (
@@ -239,10 +246,24 @@ export default function DashboardPage() {
               <HelpCircle className="h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Course
-          </Button>
+          <div className="flex items-center gap-2">
+            {stats.availableBalance > 0 && (
+              <Button 
+                variant="outline"
+                onClick={() => setShowWithdrawDialog(true)}
+                data-testid="button-withdraw"
+                className="gap-2"
+              >
+                <Wallet className="h-4 w-4" />
+                <span className="hidden sm:inline">Withdraw</span>
+                <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
+              </Button>
+            )}
+            <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Course
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -417,6 +438,13 @@ export default function DashboardPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <WithdrawRequestDialog
+        open={showWithdrawDialog}
+        onOpenChange={setShowWithdrawDialog}
+        companyId={companyId || ""}
+        availableBalance={stats.availableBalance}
+      />
     </div>
   );
 }

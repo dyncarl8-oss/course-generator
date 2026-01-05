@@ -2,7 +2,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Sparkles, Users, Zap, CheckCircle, ArrowRight } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function LandingPage() {
   return (
@@ -15,7 +14,6 @@ export default function LandingPage() {
             </div>
             <span className="text-lg font-semibold">AI Course Builder</span>
           </div>
-          <ThemeToggle />
         </div>
       </header>
 

@@ -18,7 +18,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   BookOpen, Lock, Unlock, ChevronRight, 
@@ -315,7 +314,6 @@ export default function ExperiencePage() {
                   {data?.user.username}
                 </span>
               </div>
-              <ThemeToggle />
               <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
                 <Plus className="h-4 w-4 mr-2" />
                 New Course
@@ -548,7 +546,6 @@ export default function ExperiencePage() {
                 {data?.user.username}
               </span>
             </div>
-            <ThemeToggle />
           </div>
         </div>
       </header>

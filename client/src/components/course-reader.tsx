@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { TTSPlayer } from "@/components/tts-player";
 import {
   ChevronLeft,
@@ -422,7 +421,6 @@ export function CourseReader({ course, experienceId, initialLessonId }: CourseRe
             <span className="tabular-nums font-medium">{currentIndex + 1}</span>
             <span className="text-muted-foreground">/ {allLessons.length}</span>
           </div>
-          <ThemeToggle />
         </div>
       </header>
 

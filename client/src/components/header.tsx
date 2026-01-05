@@ -1,6 +1,5 @@
 import { Link } from "wouter";
 import { BookOpen } from "lucide-react";
-import { ThemeToggle } from "./theme-toggle";
 import { UserMenu } from "./user-menu";
 import { useAuth } from "@/lib/auth";
 
@@ -48,7 +47,6 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           <UserMenu />
         </div>
       </div>

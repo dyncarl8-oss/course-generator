@@ -1,16 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
+import { useParams } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Header } from "@/components/header";
-import { 
-  ArrowLeft, Users, BookOpen, TrendingUp, 
-  Calendar, BarChart3, ChevronRight 
-} from "lucide-react";
+import { CourseBuilderHeader } from "@/components/course-builder-header";
+import { Users, BookOpen, TrendingUp, Calendar, BarChart3, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { Course } from "@shared/schema";
 
@@ -18,6 +15,11 @@ interface DashboardData {
   user: { id: string; username: string; email: string };
   courses: (Course & { moduleCount: number; lessonCount: number; studentCount: number })[];
   companyId: string;
+  earnings?: {
+    totalEarnings: number;
+    availableBalance: number;
+    pendingBalance: number;
+  };
 }
 
 interface AnalyticsData {
@@ -49,17 +51,22 @@ export default function AnalyticsPage() {
 
   if (dashboardLoading) {
     return (
-      <div className="p-5 space-y-5">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-9 w-9" />
-          <Skeleton className="h-6 w-32" />
+      <div className="h-full bg-background flex flex-col">
+        {companyId ? (
+          <CourseBuilderHeader companyId={companyId} backHref={`/dashboard/${companyId}`} />
+        ) : null}
+        <div className="p-5 space-y-5">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-9 w-9" />
+            <Skeleton className="h-6 w-32" />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+            <Skeleton className="h-20" />
+          </div>
+          <Skeleton className="h-80" />
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-          <Skeleton className="h-20" />
-        </div>
-        <Skeleton className="h-80" />
       </div>
     );
   }
@@ -68,23 +75,17 @@ export default function AnalyticsPage() {
   const totalStudents = courses.reduce((acc, c) => acc + c.studentCount, 0);
   const totalLessons = courses.reduce((acc, c) => acc + c.lessonCount, 0);
   const publishedCourses = courses.filter((c) => c.published).length;
+  const availableBalance = dashboardData?.earnings?.availableBalance ?? 0;
 
   return (
-    <>
-      <Header />
-      <div className="h-full bg-background flex flex-col">
-        <div className="border-b bg-background shrink-0">
-          <div className="flex h-14 items-center px-5 gap-4">
-            <Button variant="ghost" size="icon" asChild data-testid="button-back">
-              <Link href={`/dashboard/${companyId}`}>
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div>
-              <h1 className="font-semibold">Analytics</h1>
-            </div>
-          </div>
-        </div>
+    <div className="h-full bg-background flex flex-col">
+      {companyId ? (
+        <CourseBuilderHeader
+          companyId={companyId}
+          availableBalance={availableBalance}
+          backHref={`/dashboard/${companyId}`}
+        />
+      ) : null}
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
         <div className="grid grid-cols-3 gap-4">
@@ -265,7 +266,6 @@ export default function AnalyticsPage() {
           </Card>
         </div>
       </div>
-      </div>
-    </>
+    </div>
   );
 }

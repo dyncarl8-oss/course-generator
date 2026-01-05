@@ -80,6 +80,7 @@ import type { CourseWithModules, MediaItem } from "@shared/schema";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateCourseImage } from "@/lib/image-generator";
 import { MediaDialog } from "@/components/media-dialog";
+import { CourseBuilderHeader } from "@/components/course-builder-header";
 
 export default function CourseEditPage() {
   const { companyId, courseId } = useParams<{ companyId: string; courseId: string }>();
@@ -90,6 +91,21 @@ export default function CourseEditPage() {
     queryKey: ["/api/dashboard", companyId, "courses", courseId],
     enabled: !!companyId && !!courseId,
   });
+
+  type DashboardData = {
+    earnings?: {
+      totalEarnings: number;
+      availableBalance: number;
+      pendingBalance: number;
+    };
+  };
+
+  const { data: dashboardData } = useQuery<DashboardData>({
+    queryKey: ["/api/dashboard", companyId],
+    enabled: !!companyId,
+  });
+
+  const availableBalance = dashboardData?.earnings?.availableBalance ?? 0;
 
   interface AnalyticsStudent {
     id: string;
@@ -405,11 +421,15 @@ export default function CourseEditPage() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col bg-background">
-        <div className="h-14 border-b px-6 flex items-center gap-4">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <Skeleton className="h-5 w-48" />
-        </div>
+      <div className="h-screen flex flex-col bg-background overflow-hidden">
+        {companyId ? (
+          <CourseBuilderHeader
+            companyId={companyId}
+            availableBalance={availableBalance}
+            backHref={`/dashboard/${companyId}`}
+            breadcrumb={<span className="truncate">Loading…</span>}
+          />
+        ) : null}
         <div className="flex-1 p-6">
           <div className="max-w-4xl mx-auto space-y-6">
             <Skeleton className="h-12 w-full" />
@@ -616,8 +636,11 @@ export default function CourseEditPage() {
   const trackLessonContentEdit = (lessonId: string, newContent: string) => {
     let originalContent = '';
     for (const module of course.modules) {
-      const lesson = module.lessons.find(l => l.id === lessonId);
-      if (lesson) { originalContent = lesson.content || ''; break; }
+      const lesson = module.lessons.find((l) => l.id === lessonId);
+      if (lesson) {
+        originalContent = lesson.content || '';
+        break;
+      }
     }
     if (newContent === originalContent) {
       editedContentRef.current.delete(`content-${lessonId}`);
@@ -627,49 +650,17 @@ export default function CourseEditPage() {
     setIsDirty(checkIfDirtyFromRef());
   };
 
-  if (!course) {
-    return (
-      <div className="h-full flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto">
-            <FileText className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-lg font-semibold">Course not found</h2>
-          <p className="text-muted-foreground text-sm">The course you're looking for doesn't exist.</p>
-          <Button variant="outline" asChild>
-            <Link href={`/dashboard/${companyId}`}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
-      {/* Minimal Header */}
-      <header className="h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
-        <div className="h-full px-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Button variant="ghost" size="icon" asChild className="shrink-0" data-testid="button-back">
-              <Link href={`/dashboard/${companyId}`}>
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <Separator orientation="vertical" className="h-6" />
-            <nav className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0 flex-1">
-              <span className="shrink-0">Courses</span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-medium text-foreground truncate">{course.title}</span>
-            </nav>
-          </div>
+      <CourseBuilderHeader
+        companyId={companyId}
+        availableBalance={availableBalance}
+        backHref={`/dashboard/${companyId}`}
+        breadcrumb={<span className="truncate">{course.title}</span>}
+        rightSlot={
           <div className="flex items-center gap-2 shrink-0">
-            <Badge 
-              className={course.published 
-                ? "bg-green-500/90 text-white" 
-                : "bg-amber-500/90 text-white"}
+            <Badge
+              className={course.published ? "bg-green-500/90 text-white" : "bg-amber-500/90 text-white"}
             >
               {course.published ? "Live" : "Draft"}
             </Badge>
@@ -726,8 +717,8 @@ export default function CourseEditPage() {
               </Button>
             )}
           </div>
-        </div>
-      </header>
+        }
+      />
 
       {/* Main Content with Sidebar */}
       <SidebarProvider defaultOpen={true} style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>

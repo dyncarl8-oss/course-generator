@@ -12,6 +12,12 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
+interface AdminBalance {
+  totalEarnings: number;
+  availableBalance: number;
+  updatedAt: Date;
+}
+
 function docToUser(doc: any): User {
   return {
     id: doc._id,
@@ -21,7 +27,6 @@ function docToUser(doc: any): User {
     profilePicUrl: doc.profilePicUrl || null,
     role: doc.role,
     whopCompanyId: doc.whopCompanyId || null,
-    balance: typeof doc.balance === "number" ? doc.balance : 0,
     createdAt: doc.createdAt,
   };
 }
@@ -110,6 +115,7 @@ function docToCreatorEarnings(doc: any): CreatorEarnings {
 
 export interface IStorage {
   ensureUserBalanceFields(): Promise<void>;
+  ensureAdminBalanceInitialized(userId: string): Promise<void>;
 
   getUser(id: string): Promise<User | undefined>;
   getUserByWhopId(whopUserId: string): Promise<User | undefined>;
@@ -157,21 +163,40 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   async ensureUserBalanceFields(): Promise<void> {
     const now = new Date();
-    await Promise.all([
-      UserModel.updateMany({ balance: { $exists: false } }, { $set: { balance: 0 } }),
-      UserModel.updateMany(
-        { adminBalance: { $exists: false } },
-        {
-          $set: {
-            adminBalance: {
-              totalEarnings: 0,
-              availableBalance: 0,
-              updatedAt: now,
-            },
+    // Only initialize adminBalance for users who should have it (admins/creators)
+    await UserModel.updateMany(
+      { 
+        role: { $in: ["admin", "creator"] },
+        adminBalance: { $exists: false } 
+      },
+      {
+        $set: {
+          adminBalance: {
+            totalEarnings: 0,
+            availableBalance: 0,
+            updatedAt: now,
           },
         },
-      ),
-    ]);
+      },
+    );
+  }
+
+  async ensureAdminBalanceInitialized(userId: string): Promise<void> {
+    const user = await UserModel.findById(userId).select({ role: 1, adminBalance: 1 });
+    if (!user) return;
+    
+    // Only initialize adminBalance for admin users
+    if (user.role === "admin" && (!user.adminBalance || typeof user.adminBalance !== 'object')) {
+      await UserModel.findByIdAndUpdate(userId, {
+        $set: {
+          adminBalance: {
+            totalEarnings: 0,
+            availableBalance: 0,
+            updatedAt: new Date(),
+          },
+        },
+      });
+    }
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -513,13 +538,16 @@ export class DatabaseStorage implements IStorage {
         ? { whopUserId: adminWhopUserId }
         : { role: "admin" };
 
-    const adminUser = await UserModel.findOne(adminQuery).select({ _id: 1 }).lean();
+    const adminUser = await UserModel.findOne(adminQuery).select({ _id: 1, role: 1 }).lean();
     if (!adminUser) {
       console.warn(
         "addAdminEarnings: No platform admin user found. Set PLATFORM_ADMIN_USER_ID / PLATFORM_ADMIN_WHOP_USER_ID or mark a user with role='admin' to track platform earnings.",
       );
       return;
     }
+
+    // Ensure admin balance is initialized for this admin user
+    await this.ensureAdminBalanceInitialized(adminUser._id);
 
     await UserModel.findByIdAndUpdate(adminUser._id, {
       $inc: {

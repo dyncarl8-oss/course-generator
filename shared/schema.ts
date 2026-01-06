@@ -14,6 +14,7 @@ export interface IUser extends Document {
     availableBalance: number;
     updatedAt: Date;
   };
+  balance: number;
   createdAt: Date;
 }
 

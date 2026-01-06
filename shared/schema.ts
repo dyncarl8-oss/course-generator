@@ -14,7 +14,6 @@ export interface IUser extends Document {
     availableBalance: number;
     updatedAt: Date;
   };
-  balance: number;
   createdAt: Date;
 }
 
@@ -107,7 +106,6 @@ const userSchema = new Schema<IUser>({
   profilePicUrl: { type: String },
   role: { type: String, default: "member", required: true },
   whopCompanyId: { type: String },
-  balance: { type: Number, default: 0, required: true },
   adminBalance: { type: adminBalanceSchema, default: () => ({}) },
   createdAt: { type: Date, default: Date.now, required: true },
 });
@@ -217,7 +215,6 @@ export type User = {
   profilePicUrl: string | null;
   role: string;
   whopCompanyId: string | null;
-  balance: number;
   createdAt: Date;
 };
 

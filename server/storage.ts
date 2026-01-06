@@ -297,10 +297,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPublishedCoursesByCompany(companyId: string): Promise<CourseWithModules[]> {
-    const courseDocs = await CourseModel.find({ 
-      whopCompanyId: companyId, 
-      published: true 
+    const courseDocs = await CourseModel.find({
+      whopCompanyId: companyId,
+      published: true
     }).sort({ createdAt: -1 });
+
+    console.log(`[Storage] getPublishedCoursesByCompany - companyId: ${companyId}, found: ${courseDocs.length} courses`);
 
     const result: CourseWithModules[] = [];
     for (const courseDoc of courseDocs) {

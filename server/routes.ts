@@ -438,6 +438,8 @@ export async function registerRoutes(
         } = req.body;
         const companyId = req.params.companyId;
 
+        console.log("[Dashboard] Creating course with companyId:", companyId, "by user:", req.user.id);
+
         const validated = generatedCourseSchema.safeParse(generatedCourse);
         if (!validated.success) {
           return res.status(400).json({ error: "Invalid course data" });
@@ -455,6 +457,8 @@ export async function registerRoutes(
           price: isFree === true ? "0" : price || "0",
           generationStatus: generateLessonImages ? "generating" : "complete",
         });
+
+        console.log("[Dashboard] Created course with ID:", course.id, "whopCompanyId:", course.whopCompanyId);
 
         const createdLessons: {
           moduleIndex: number;
@@ -1103,6 +1107,9 @@ export async function registerRoutes(
           const companyId = await getCompanyIdFromExperience(
             req.params.experienceId,
           );
+
+          console.log("[Experience] Admin view - experienceId:", req.params.experienceId, "companyId:", companyId);
+
           if (companyId && !req.user.whopCompanyId) {
             await storage.updateUser(req.user.id, {
               role: "creator",
@@ -1121,12 +1128,16 @@ export async function registerRoutes(
 
           const userId = req.user.id;
           const courses = await storage.getCoursesByCreator(userId, companyId || undefined);
+
+          console.log("[Experience] Admin view - found", courses.length, "courses for creator:", userId);
+
           const coursesWithStats = await Promise.all(
             courses.map(async (course) => {
               const courseWithModules = await storage.getCourseWithModules(
                 course.id,
               );
               const access = await storage.getCourseAccessByCourse(course.id);
+              console.log("[Experience] Course:", course.id, "whopCompanyId:", course.whopCompanyId, "published:", course.published);
               return {
                 ...course,
                 moduleCount: courseWithModules?.modules.length || 0,
@@ -1178,6 +1189,9 @@ export async function registerRoutes(
           const companyId = await getCompanyIdFromExperience(
             req.params.experienceId,
           );
+
+          console.log("[Experience] Member view - experienceId:", req.params.experienceId, "companyId:", companyId);
+
           if (!companyId) {
             return res.status(400).json({ error: "Invalid experience" });
           }
@@ -1190,6 +1204,8 @@ export async function registerRoutes(
 
           const publishedCourses =
             await storage.getPublishedCoursesByCompany(companyId);
+
+          console.log("[Experience] Found published courses:", publishedCourses.length, "for companyId:", companyId);
 
           // Get courses user has access to (including unpublished ones they already paid for)
           const userAccessRecords = req.user
@@ -1414,14 +1430,20 @@ export async function registerRoutes(
           return res.status(401).json({ error: "User not found" });
         }
 
-        // Ensure user is marked as creator and has company ID set
+        // Get the company ID from the experience
         const companyId = await getCompanyIdFromExperience(
           req.params.experienceId,
         );
-        if (
-          companyId &&
-          (!req.user.whopCompanyId || req.user.role !== "creator")
-        ) {
+
+        if (!companyId) {
+          console.error("Failed to get company ID from experience:", req.params.experienceId);
+          return res.status(400).json({ 
+            error: "Unable to determine company for this experience. Please ensure the experience is properly configured in Whop." 
+          });
+        }
+
+        // Ensure user is marked as creator and has company ID set
+        if (!req.user.whopCompanyId || req.user.role !== "creator") {
           await storage.updateUser(req.user.id, {
             role: "creator",
             whopCompanyId: companyId,
@@ -1454,6 +1476,8 @@ export async function registerRoutes(
           price: isFree === true ? "0" : price || "0",
           generationStatus: generateLessonImages ? "generating" : "complete",
         });
+
+        console.log("[Experience] Created course with ID:", course.id, "whopCompanyId:", course.whopCompanyId, "for experience:", req.params.experienceId);
 
         const createdLessons: {
           moduleIndex: number;
@@ -1709,13 +1733,22 @@ export async function registerRoutes(
 
         const { title, description, published, isFree, price } = req.body;
 
+        // Ensure the course has the correct whopCompanyId from the experience
+        const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+
+        console.log("[Experience] Updating course:", req.params.courseId, "with companyId:", companyId, "current whopCompanyId:", course.whopCompanyId);
+
         const updated = await storage.updateCourse(course.id, {
           ...(title !== undefined && { title }),
           ...(description !== undefined && { description }),
           ...(published !== undefined && { published }),
           ...(isFree !== undefined && { isFree }),
           ...(price !== undefined && { price }),
+          // Ensure whopCompanyId is set correctly
+          ...(companyId && { whopCompanyId: companyId }),
         });
+
+        console.log("[Experience] Updated course:", updated?.id, "with whopCompanyId:", updated?.whopCompanyId, "published:", updated?.published);
 
         res.json(updated);
       } catch {

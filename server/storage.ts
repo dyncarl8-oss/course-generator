@@ -21,6 +21,7 @@ function docToUser(doc: any): User {
     profilePicUrl: doc.profilePicUrl || null,
     role: doc.role,
     whopCompanyId: doc.whopCompanyId || null,
+    balance: typeof doc.balance === "number" ? doc.balance : 0,
     createdAt: doc.createdAt,
   };
 }
@@ -108,6 +109,8 @@ function docToCreatorEarnings(doc: any): CreatorEarnings {
 }
 
 export interface IStorage {
+  ensureUserBalanceFields(): Promise<void>;
+
   getUser(id: string): Promise<User | undefined>;
   getUserByWhopId(whopUserId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
@@ -152,6 +155,25 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async ensureUserBalanceFields(): Promise<void> {
+    const now = new Date();
+    await Promise.all([
+      UserModel.updateMany({ balance: { $exists: false } }, { $set: { balance: 0 } }),
+      UserModel.updateMany(
+        { adminBalance: { $exists: false } },
+        {
+          $set: {
+            adminBalance: {
+              totalEarnings: 0,
+              availableBalance: 0,
+              updatedAt: now,
+            },
+          },
+        },
+      ),
+    ]);
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const doc = await UserModel.findById(id);
     return doc ? docToUser(doc) : undefined;

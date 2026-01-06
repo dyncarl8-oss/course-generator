@@ -90,6 +90,15 @@ export interface ICreatorEarnings extends Document {
   updatedAt: Date;
 }
 
+const adminBalanceSchema = new Schema(
+  {
+    totalEarnings: { type: Number, default: 0 },
+    availableBalance: { type: Number, default: 0 },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const userSchema = new Schema<IUser>({
   _id: { type: String, required: true },
   whopUserId: { type: String, required: true, unique: true },
@@ -98,11 +107,8 @@ const userSchema = new Schema<IUser>({
   profilePicUrl: { type: String },
   role: { type: String, default: "member", required: true },
   whopCompanyId: { type: String },
-  adminBalance: {
-    totalEarnings: { type: Number, default: 0 },
-    availableBalance: { type: Number, default: 0 },
-    updatedAt: { type: Date, default: Date.now },
-  },
+  balance: { type: Number, default: 0, required: true },
+  adminBalance: { type: adminBalanceSchema, default: () => ({}) },
   createdAt: { type: Date, default: Date.now, required: true },
 });
 
@@ -211,6 +217,7 @@ export type User = {
   profilePicUrl: string | null;
   role: string;
   whopCompanyId: string | null;
+  balance: number;
   createdAt: Date;
 };
 

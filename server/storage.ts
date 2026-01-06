@@ -36,6 +36,7 @@ function docToCourse(doc: any): Course {
   return {
     id: doc._id,
     creatorId: doc.creatorId,
+    whopCompanyId: doc.whopCompanyId || null,
     title: doc.title,
     description: doc.description || null,
     coverImage: doc.coverImage || null,
@@ -125,7 +126,7 @@ export interface IStorage {
   
   getCourse(id: string): Promise<Course | undefined>;
   getCourseWithModules(id: string): Promise<CourseWithModules | undefined>;
-  getCoursesByCreator(creatorId: string): Promise<Course[]>;
+  getCoursesByCreator(creatorId: string, companyId?: string): Promise<Course[]>;
   getPublishedCourses(): Promise<Course[]>;
   getPublishedCoursesByCompany(companyId: string): Promise<CourseWithModules[]>;
   createCourse(course: InsertCourse): Promise<Course>;
@@ -282,8 +283,12 @@ export class DatabaseStorage implements IStorage {
     return { ...course, modules: modulesWithLessons, creator };
   }
 
-  async getCoursesByCreator(creatorId: string): Promise<Course[]> {
-    const docs = await CourseModel.find({ creatorId }).sort({ createdAt: -1 });
+  async getCoursesByCreator(creatorId: string, companyId?: string): Promise<Course[]> {
+    const query: any = { creatorId };
+    if (companyId) {
+      query.whopCompanyId = companyId;
+    }
+    const docs = await CourseModel.find(query).sort({ createdAt: -1 });
     return docs.map(docToCourse);
   }
 
@@ -293,11 +298,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPublishedCoursesByCompany(companyId: string): Promise<CourseWithModules[]> {
-    const creators = await UserModel.find({ whopCompanyId: companyId });
-    const creatorIds = creators.map(c => c._id);
-    
     const courseDocs = await CourseModel.find({ 
-      creatorId: { $in: creatorIds }, 
+      whopCompanyId: companyId, 
       published: true 
     }).sort({ createdAt: -1 });
 
@@ -305,8 +307,7 @@ export class DatabaseStorage implements IStorage {
     for (const courseDoc of courseDocs) {
       const courseWithModules = await this.getCourseWithModules(courseDoc._id);
       if (courseWithModules) {
-        const creator = creators.find(c => c._id === courseDoc.creatorId);
-        result.push({ ...courseWithModules, creator: creator ? docToUser(creator) : undefined });
+        result.push(courseWithModules);
       }
     }
     return result;
@@ -317,6 +318,7 @@ export class DatabaseStorage implements IStorage {
     const doc = await CourseModel.create({
       _id: id,
       creatorId: insertCourse.creatorId,
+      whopCompanyId: insertCourse.whopCompanyId,
       title: insertCourse.title,
       description: insertCourse.description,
       coverImage: insertCourse.coverImage,

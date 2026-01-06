@@ -285,9 +285,8 @@ export class DatabaseStorage implements IStorage {
 
   async getCoursesByCreator(creatorId: string, companyId?: string): Promise<Course[]> {
     const query: any = { creatorId };
-    if (companyId) {
-      query.whopCompanyId = companyId;
-    }
+    // Don't filter by whopCompanyId - courses should be visible to their creator 
+    // regardless of which company dashboard they're accessing
     const docs = await CourseModel.find(query).sort({ createdAt: -1 });
     return docs.map(docToCourse);
   }

@@ -248,21 +248,19 @@ export default function DashboardPage() {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            {stats.availableBalance > 0 && (
-              <Button 
-                variant="outline"
-                onClick={() => setShowWithdrawDialog(true)}
-                data-testid="button-withdraw"
-                className="gap-2"
-              >
-                <Wallet className="h-4 w-4" />
-                <span className="hidden sm:inline">Withdraw</span>
-                <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
-              </Button>
-            )}
+            <Button 
+              variant="outline"
+              onClick={() => setShowWithdrawDialog(true)}
+              data-testid="button-withdraw"
+              className="gap-2"
+            >
+              <Wallet className="h-4 w-4" />
+              <span className="hidden sm:inline">Withdraw</span>
+              <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
+            </Button>
             <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
               <Plus className="h-4 w-4 mr-2" />
-              New Course
+              Create Course
             </Button>
             <UserMenu />
           </div>

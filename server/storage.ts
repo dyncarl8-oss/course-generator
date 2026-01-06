@@ -1,6 +1,6 @@
 import { 
   UserModel, CourseModel, ModuleModel, LessonModel, CourseAccessModel,
-  PaymentModel, CreatorEarningsModel,
+  PaymentModel, CreatorEarningsModel, AdminBalanceModel,
   type User, type InsertUser, 
   type Course, type InsertCourse,
   type Module, type InsertModule,
@@ -8,6 +8,7 @@ import {
   type CourseAccess, type InsertCourseAccess,
   type Payment, type InsertPayment,
   type CreatorEarnings,
+  type AdminBalance,
   type CourseWithModules
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -107,6 +108,15 @@ function docToCreatorEarnings(doc: any): CreatorEarnings {
   };
 }
 
+function docToAdminBalance(doc: any): AdminBalance {
+  return {
+    id: doc._id,
+    totalEarnings: doc.totalEarnings,
+    availableBalance: doc.availableBalance,
+    updatedAt: doc.updatedAt,
+  };
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByWhopId(whopUserId: string): Promise<User | undefined>;
@@ -147,6 +157,9 @@ export interface IStorage {
   
   getCreatorEarnings(creatorId: string): Promise<CreatorEarnings | undefined>;
   addCreatorEarnings(creatorId: string, amount: number): Promise<CreatorEarnings>;
+  
+  getAdminBalance(): Promise<AdminBalance | undefined>;
+  addAdminEarnings(amount: number): Promise<AdminBalance>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -474,6 +487,35 @@ export class DatabaseStorage implements IStorage {
         pendingBalance: 0,
       });
       return docToCreatorEarnings(doc);
+    }
+  }
+
+  async getAdminBalance(): Promise<AdminBalance | undefined> {
+    const doc = await AdminBalanceModel.findOne({});
+    return doc ? docToAdminBalance(doc) : undefined;
+  }
+
+  async addAdminEarnings(amount: number): Promise<AdminBalance> {
+    const existing = await AdminBalanceModel.findOne({});
+    
+    if (existing) {
+      const doc = await AdminBalanceModel.findByIdAndUpdate(
+        existing._id,
+        {
+          $inc: { totalEarnings: amount, availableBalance: amount },
+          updatedAt: new Date(),
+        },
+        { new: true }
+      );
+      return docToAdminBalance(doc!);
+    } else {
+      const id = randomUUID();
+      const doc = await AdminBalanceModel.create({
+        _id: id,
+        totalEarnings: amount,
+        availableBalance: amount,
+      });
+      return docToAdminBalance(doc);
     }
   }
 }

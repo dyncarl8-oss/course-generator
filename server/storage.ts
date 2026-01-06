@@ -1,6 +1,6 @@
 import { 
   UserModel, CourseModel, ModuleModel, LessonModel, CourseAccessModel,
-  PaymentModel, CreatorEarningsModel, AdminBalanceModel,
+  PaymentModel, CreatorEarningsModel,
   type User, type InsertUser, 
   type Course, type InsertCourse,
   type Module, type InsertModule,
@@ -8,7 +8,6 @@ import {
   type CourseAccess, type InsertCourseAccess,
   type Payment, type InsertPayment,
   type CreatorEarnings,
-  type AdminBalance,
   type CourseWithModules
 } from "@shared/schema";
 import { randomUUID } from "crypto";
@@ -108,15 +107,6 @@ function docToCreatorEarnings(doc: any): CreatorEarnings {
   };
 }
 
-function docToAdminBalance(doc: any): AdminBalance {
-  return {
-    id: doc._id,
-    totalEarnings: doc.totalEarnings,
-    availableBalance: doc.availableBalance,
-    updatedAt: doc.updatedAt,
-  };
-}
-
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByWhopId(whopUserId: string): Promise<User | undefined>;
@@ -157,9 +147,8 @@ export interface IStorage {
   
   getCreatorEarnings(creatorId: string): Promise<CreatorEarnings | undefined>;
   addCreatorEarnings(creatorId: string, amount: number): Promise<CreatorEarnings>;
-  
-  getAdminBalance(): Promise<AdminBalance | undefined>;
-  addAdminEarnings(amount: number): Promise<AdminBalance>;
+
+  addAdminEarnings(amount: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -490,33 +479,35 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getAdminBalance(): Promise<AdminBalance | undefined> {
-    const doc = await AdminBalanceModel.findOne({});
-    return doc ? docToAdminBalance(doc) : undefined;
-  }
+  async addAdminEarnings(amount: number): Promise<void> {
+    if (!Number.isFinite(amount) || amount === 0) return;
 
-  async addAdminEarnings(amount: number): Promise<AdminBalance> {
-    const existing = await AdminBalanceModel.findOne({});
-    
-    if (existing) {
-      const doc = await AdminBalanceModel.findByIdAndUpdate(
-        existing._id,
-        {
-          $inc: { totalEarnings: amount, availableBalance: amount },
-          updatedAt: new Date(),
-        },
-        { new: true }
+    const adminUserId = process.env.PLATFORM_ADMIN_USER_ID;
+    const adminWhopUserId = process.env.PLATFORM_ADMIN_WHOP_USER_ID;
+
+    const adminQuery = adminUserId
+      ? { _id: adminUserId }
+      : adminWhopUserId
+        ? { whopUserId: adminWhopUserId }
+        : { role: "admin" };
+
+    const adminUser = await UserModel.findOne(adminQuery).select({ _id: 1 }).lean();
+    if (!adminUser) {
+      console.warn(
+        "addAdminEarnings: No platform admin user found. Set PLATFORM_ADMIN_USER_ID / PLATFORM_ADMIN_WHOP_USER_ID or mark a user with role='admin' to track platform earnings.",
       );
-      return docToAdminBalance(doc!);
-    } else {
-      const id = randomUUID();
-      const doc = await AdminBalanceModel.create({
-        _id: id,
-        totalEarnings: amount,
-        availableBalance: amount,
-      });
-      return docToAdminBalance(doc);
+      return;
     }
+
+    await UserModel.findByIdAndUpdate(adminUser._id, {
+      $inc: {
+        "adminBalance.totalEarnings": amount,
+        "adminBalance.availableBalance": amount,
+      },
+      $set: {
+        "adminBalance.updatedAt": new Date(),
+      },
+    });
   }
 }
 

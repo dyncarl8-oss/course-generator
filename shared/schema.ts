@@ -9,6 +9,11 @@ export interface IUser extends Document {
   profilePicUrl?: string;
   role: string;
   whopCompanyId?: string;
+  adminBalance?: {
+    totalEarnings: number;
+    availableBalance: number;
+    updatedAt: Date;
+  };
   createdAt: Date;
 }
 
@@ -84,13 +89,6 @@ export interface ICreatorEarnings extends Document {
   updatedAt: Date;
 }
 
-export interface IAdminBalance extends Document {
-  _id: string;
-  totalEarnings: number;
-  availableBalance: number;
-  updatedAt: Date;
-}
-
 const userSchema = new Schema<IUser>({
   _id: { type: String, required: true },
   whopUserId: { type: String, required: true, unique: true },
@@ -99,6 +97,11 @@ const userSchema = new Schema<IUser>({
   profilePicUrl: { type: String },
   role: { type: String, default: "member", required: true },
   whopCompanyId: { type: String },
+  adminBalance: {
+    totalEarnings: { type: Number, default: 0 },
+    availableBalance: { type: Number, default: 0 },
+    updatedAt: { type: Date, default: Date.now },
+  },
   createdAt: { type: Date, default: Date.now, required: true },
 });
 
@@ -191,13 +194,6 @@ const creatorEarningsSchema = new Schema<ICreatorEarnings>({
   updatedAt: { type: Date, default: Date.now },
 });
 
-const adminBalanceSchema = new Schema<IAdminBalance>({
-  _id: { type: String, required: true },
-  totalEarnings: { type: Number, default: 0 },
-  availableBalance: { type: Number, default: 0 },
-  updatedAt: { type: Date, default: Date.now },
-});
-
 export const UserModel = mongoose.models.User || mongoose.model<IUser>("User", userSchema);
 export const CourseModel = mongoose.models.Course || mongoose.model<ICourse>("Course", courseSchema);
 export const ModuleModel = mongoose.models.Module || mongoose.model<IModule>("Module", moduleSchema);
@@ -205,7 +201,6 @@ export const LessonModel = mongoose.models.Lesson || mongoose.model<ILesson>("Le
 export const CourseAccessModel = mongoose.models.CourseAccess || mongoose.model<ICourseAccess>("CourseAccess", courseAccessSchema);
 export const PaymentModel = mongoose.models.Payment || mongoose.model<IPayment>("Payment", paymentSchema);
 export const CreatorEarningsModel = mongoose.models.CreatorEarnings || mongoose.model<ICreatorEarnings>("CreatorEarnings", creatorEarningsSchema);
-export const AdminBalanceModel = mongoose.models.AdminBalance || mongoose.model<IAdminBalance>("AdminBalance", adminBalanceSchema);
 
 export type User = {
   id: string;
@@ -338,13 +333,6 @@ export type CreatorEarnings = {
   totalEarnings: number;
   availableBalance: number;
   pendingBalance: number;
-  updatedAt: Date;
-};
-
-export type AdminBalance = {
-  id: string;
-  totalEarnings: number;
-  availableBalance: number;
   updatedAt: Date;
 };
 

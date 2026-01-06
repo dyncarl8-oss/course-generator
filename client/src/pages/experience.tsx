@@ -19,6 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
 import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
+import { UserMenu } from "@/components/user-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   BookOpen, Lock, Unlock, ChevronRight, 
@@ -322,6 +323,7 @@ export default function ExperiencePage() {
                 <Plus className="h-4 w-4 mr-2" />
                 New Course
               </Button>
+              <UserMenu />
             </div>
           </div>
         </header>

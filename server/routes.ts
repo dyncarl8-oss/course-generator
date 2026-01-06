@@ -188,6 +188,13 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
+      const { amount } = req.body;
+      const requestedAmount = amount ? parseFloat(amount) : null;
+
+      if (requestedAmount !== null && (isNaN(requestedAmount) || requestedAmount <= 0)) {
+        return res.status(400).json({ error: "Invalid withdrawal amount" });
+      }
+
       // For admin users, use adminBalance; for creators, use CreatorEarnings
       let availableBalance: number;
       let totalEarnings: number;
@@ -197,8 +204,8 @@ export async function registerRoutes(
         totalEarnings = req.user.adminBalance.totalEarnings;
       } else {
         const earnings = await storage.getCreatorEarnings(req.user.id);
-        if (!earnings || earnings.availableBalance <= 0) {
-          return res.status(400).json({ error: "No available balance to withdraw" });
+        if (!earnings) {
+          return res.status(400).json({ error: "No earnings found" });
         }
         availableBalance = earnings.availableBalance;
         totalEarnings = earnings.totalEarnings;
@@ -208,6 +215,19 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No available balance to withdraw" });
       }
 
+      const withdrawAmount = requestedAmount !== null ? requestedAmount : availableBalance;
+
+      if (withdrawAmount > availableBalance) {
+        return res.status(400).json({ error: "Withdrawal amount exceeds available balance" });
+      }
+
+      // Deduct the amount
+      if (req.user.role === "admin") {
+        await storage.deductAdminEarnings(req.user.id, withdrawAmount);
+      } else {
+        await storage.deductCreatorEarnings(req.user.id, withdrawAmount);
+      }
+
       const adminName = req.user.username || req.user.email || "Unknown Admin";
 
       await sendWithdrawRequestEmail({
@@ -215,15 +235,15 @@ export async function registerRoutes(
         adminEmail: req.user.email,
         adminUsername: req.user.username,
         whopUserId: req.user.whopUserId,
-        amount: availableBalance,
-        availableBalance,
+        amount: withdrawAmount,
+        availableBalance: availableBalance - withdrawAmount,
         totalEarnings,
       });
 
       res.json({
         success: true,
         message: "Withdraw request sent successfully",
-        amount: availableBalance,
+        amount: withdrawAmount,
       });
     } catch (error) {
       console.error("Failed to process withdraw request:", error);
@@ -1034,6 +1054,13 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
+      const { amount } = req.body;
+      const requestedAmount = amount ? parseFloat(amount) : null;
+
+      if (requestedAmount !== null && (isNaN(requestedAmount) || requestedAmount <= 0)) {
+        return res.status(400).json({ error: "Invalid withdrawal amount" });
+      }
+
       // For admin users, use adminBalance; for creators, use CreatorEarnings
       let availableBalance: number;
       let totalEarnings: number;
@@ -1043,8 +1070,8 @@ export async function registerRoutes(
         totalEarnings = req.user.adminBalance.totalEarnings;
       } else {
         const earnings = await storage.getCreatorEarnings(req.user.id);
-        if (!earnings || earnings.availableBalance <= 0) {
-          return res.status(400).json({ error: "No available balance to withdraw" });
+        if (!earnings) {
+          return res.status(400).json({ error: "No earnings found" });
         }
         availableBalance = earnings.availableBalance;
         totalEarnings = earnings.totalEarnings;
@@ -1054,6 +1081,19 @@ export async function registerRoutes(
         return res.status(400).json({ error: "No available balance to withdraw" });
       }
 
+      const withdrawAmount = requestedAmount !== null ? requestedAmount : availableBalance;
+
+      if (withdrawAmount > availableBalance) {
+        return res.status(400).json({ error: "Withdrawal amount exceeds available balance" });
+      }
+
+      // Deduct the amount
+      if (req.user.role === "admin") {
+        await storage.deductAdminEarnings(req.user.id, withdrawAmount);
+      } else {
+        await storage.deductCreatorEarnings(req.user.id, withdrawAmount);
+      }
+
       const adminName = req.user.username || req.user.email || "Unknown Admin";
 
       await sendWithdrawRequestEmail({
@@ -1061,15 +1101,15 @@ export async function registerRoutes(
         adminEmail: req.user.email,
         adminUsername: req.user.username,
         whopUserId: req.user.whopUserId,
-        amount: availableBalance,
-        availableBalance,
+        amount: withdrawAmount,
+        availableBalance: availableBalance - withdrawAmount,
         totalEarnings,
       });
 
       res.json({
         success: true,
         message: "Withdraw request sent successfully",
-        amount: availableBalance,
+        amount: withdrawAmount,
       });
     } catch (error) {
       console.error("Failed to process withdraw request:", error);

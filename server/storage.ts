@@ -157,8 +157,10 @@ export interface IStorage {
   
   getCreatorEarnings(creatorId: string): Promise<CreatorEarnings | undefined>;
   addCreatorEarnings(creatorId: string, amount: number): Promise<CreatorEarnings>;
+  deductCreatorEarnings(creatorId: string, amount: number): Promise<CreatorEarnings>;
 
   addAdminEarnings(amount: number): Promise<void>;
+  deductAdminEarnings(adminId: string, amount: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -540,6 +542,27 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async deductCreatorEarnings(creatorId: string, amount: number): Promise<CreatorEarnings> {
+    const existing = await CreatorEarningsModel.findOne({ creatorId });
+    if (!existing) {
+      throw new Error("Creator earnings not found");
+    }
+
+    if (existing.availableBalance < amount) {
+      throw new Error("Insufficient available balance");
+    }
+
+    const doc = await CreatorEarningsModel.findByIdAndUpdate(
+      existing._id,
+      {
+        $inc: { availableBalance: -amount },
+        updatedAt: new Date(),
+      },
+      { new: true }
+    );
+    return docToCreatorEarnings(doc!);
+  }
+
   async addAdminEarnings(amount: number): Promise<void> {
     if (!Number.isFinite(amount) || amount === 0) return;
 
@@ -567,6 +590,26 @@ export class DatabaseStorage implements IStorage {
       $inc: {
         "adminBalance.totalEarnings": amount,
         "adminBalance.availableBalance": amount,
+      },
+      $set: {
+        "adminBalance.updatedAt": new Date(),
+      },
+    });
+  }
+
+  async deductAdminEarnings(adminId: string, amount: number): Promise<void> {
+    const user = await UserModel.findById(adminId);
+    if (!user || user.role !== "admin" || !user.adminBalance) {
+      throw new Error("Admin user or balance not found");
+    }
+
+    if (user.adminBalance.availableBalance < amount) {
+      throw new Error("Insufficient available balance");
+    }
+
+    await UserModel.findByIdAndUpdate(adminId, {
+      $inc: {
+        "adminBalance.availableBalance": -amount,
       },
       $set: {
         "adminBalance.updatedAt": new Date(),

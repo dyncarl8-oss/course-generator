@@ -249,14 +249,12 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             <Button 
-              variant="outline"
               onClick={() => setShowWithdrawDialog(true)}
               data-testid="button-withdraw"
-              className="gap-2"
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white border-none"
             >
               <Wallet className="h-4 w-4" />
-              <span className="hidden sm:inline">Withdraw</span>
-              <span className="font-semibold">${stats.availableBalance.toFixed(2)}</span>
+              <span>Withdraw</span>
             </Button>
             <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
               <Plus className="h-4 w-4 mr-2" />
@@ -268,7 +266,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-5 space-y-5">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <StatCard icon={Wallet} label="Available Balance" value={stats.availableBalance} testId="stat-available-balance" bgColor="bg-emerald-500/10 dark:bg-emerald-400/10" iconColor="text-emerald-600 dark:text-emerald-400" isCurrency />
           <StatCard icon={DollarSign} label="Your Total Earnings" value={stats.totalEarnings} testId="stat-earnings" bgColor="bg-amber-500/10 dark:bg-amber-400/10" iconColor="text-amber-600 dark:text-amber-400" isCurrency />
           <StatCard icon={BookOpen} label="Total Courses" value={stats.totalCourses} testId="stat-total-courses" bgColor="bg-blue-500/10 dark:bg-blue-400/10" iconColor="text-blue-600 dark:text-blue-400" />
           <StatCard icon={TrendingUp} label="Published" value={stats.publishedCourses} testId="stat-published" bgColor="bg-emerald-500/10 dark:bg-emerald-400/10" iconColor="text-emerald-600 dark:text-emerald-400" />

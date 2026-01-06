@@ -1499,11 +1499,14 @@ export async function registerRoutes(
         // Add creator earnings (70% to creator, 30% platform fee)
         // TODO: Platform fee percentage can be made configurable in the future
         const CREATOR_PERCENTAGE = 0.70; // Creator gets 70%, platform keeps 30%
+        const PLATFORM_PERCENTAGE = 0.30; // Platform gets 30%
         const totalAmount = parseFloat(payment.amount || "0");
         const creatorEarnings = totalAmount * CREATOR_PERCENTAGE;
+        const platformEarnings = totalAmount * PLATFORM_PERCENTAGE;
         await storage.addCreatorEarnings(payment.creatorId, creatorEarnings);
+        await storage.addAdminEarnings(platformEarnings);
         
-        console.log(`Payment verified and completed: course ${payment.courseId} for buyer ${payment.buyerId}, creator earnings: $${creatorEarnings.toFixed(2)} (70% of $${totalAmount.toFixed(2)})`);
+        console.log(`Payment verified and completed: course ${payment.courseId} for buyer ${payment.buyerId}, creator earnings: ${creatorEarnings.toFixed(2)} (70% of ${totalAmount.toFixed(2)}), platform earnings: ${platformEarnings.toFixed(2)} (30%)`);
         return res.json({ success: true, message: "Payment verified and access granted" });
       }
 
@@ -1527,11 +1530,14 @@ export async function registerRoutes(
         // Add creator earnings (70% to creator, 30% platform fee)
         // TODO: Platform fee percentage can be made configurable in the future
         const CREATOR_PERCENTAGE_API = 0.70; // Creator gets 70%, platform keeps 30%
+        const PLATFORM_PERCENTAGE_API = 0.30; // Platform gets 30%
         const totalAmountApi = parseFloat(payment.amount || "0");
         const creatorEarningsApi = totalAmountApi * CREATOR_PERCENTAGE_API;
+        const platformEarningsApi = totalAmountApi * PLATFORM_PERCENTAGE_API;
         await storage.addCreatorEarnings(payment.creatorId, creatorEarningsApi);
+        await storage.addAdminEarnings(platformEarningsApi);
         
-        console.log(`Payment verified via API: course ${payment.courseId} for buyer ${payment.buyerId}, creator earnings: $${creatorEarningsApi.toFixed(2)} (70% of $${totalAmountApi.toFixed(2)})`);
+        console.log(`Payment verified via API: course ${payment.courseId} for buyer ${payment.buyerId}, creator earnings: ${creatorEarningsApi.toFixed(2)} (70% of ${totalAmountApi.toFixed(2)}), platform earnings: ${platformEarningsApi.toFixed(2)} (30%)`);
         return res.json({ success: true, message: "Payment verified and access granted" });
       }
 

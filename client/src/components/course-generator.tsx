@@ -83,7 +83,7 @@ export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGen
             <Sparkles className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Create New Course</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Create Course</h2>
             <p className="text-muted-foreground mt-1">
               Enter a topic and AI will generate a complete curriculum
             </p>

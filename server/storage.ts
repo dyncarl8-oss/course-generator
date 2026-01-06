@@ -164,10 +164,23 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   async ensureUserBalanceFields(): Promise<void> {
     const now = new Date();
-    // Only initialize adminBalance for users who should have it (admins/creators)
+    // Remove adminBalance from non-admin users (creators, members, etc.)
     await UserModel.updateMany(
       { 
-        role: { $in: ["admin", "creator"] },
+        role: { $ne: "admin" },
+        adminBalance: { $exists: true } 
+      },
+      {
+        $unset: {
+          adminBalance: "",
+        },
+      },
+    );
+
+    // Only initialize adminBalance for admin users (platform owners)
+    await UserModel.updateMany(
+      { 
+        role: "admin",
         adminBalance: { $exists: false } 
       },
       {

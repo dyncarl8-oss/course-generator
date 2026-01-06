@@ -38,7 +38,7 @@ interface ExperienceData {
   courses: (Course & { moduleCount: number; lessonCount: number; hasAccess: boolean; studentCount?: number })[];
   experienceId: string;
   accessLevel: "admin" | "customer" | "no_access";
-  earnings?: { totalEarnings: string; availableBalance: number; pendingBalance: number };
+  earnings?: { totalEarnings: number; availableBalance: number; pendingBalance: number };
 }
 
 export default function ExperiencePage() {
@@ -283,7 +283,7 @@ export default function ExperiencePage() {
       totalCourses: data?.courses.length || 0,
       publishedCourses: data?.courses.filter((c) => c.published).length || 0,
       totalStudents: data?.courses.reduce((acc, c) => acc + (c.studentCount || 0), 0) || 0,
-      totalEarnings: parseFloat(data?.earnings?.totalEarnings || "0"),
+      totalEarnings: data?.earnings?.totalEarnings || 0,
       availableBalance: data?.earnings?.availableBalance || 0,
     };
 

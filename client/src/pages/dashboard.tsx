@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { CourseGenerator, CoursePreview } from "@/components/course-generator";
 import { CourseCard } from "@/components/course-card";
 import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
+import { UserMenu } from "@/components/user-menu";
 import { 
   Plus, BookOpen, Users, TrendingUp, 
   Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet
@@ -261,8 +262,9 @@ export default function DashboardPage() {
             )}
             <Button onClick={() => setActiveTab("create")} data-testid="button-create-course">
               <Plus className="h-4 w-4 mr-2" />
-              Create Course
+              New Course
             </Button>
+            <UserMenu />
           </div>
         </div>
       </div>

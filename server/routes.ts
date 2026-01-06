@@ -1034,28 +1034,42 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
-      const earnings = await storage.getCreatorEarnings(req.user.id);
-      
-      if (!earnings || earnings.availableBalance <= 0) {
+      // For admin users, use adminBalance; for creators, use CreatorEarnings
+      let availableBalance: number;
+      let totalEarnings: number;
+
+      if (req.user.role === "admin" && req.user.adminBalance) {
+        availableBalance = req.user.adminBalance.availableBalance;
+        totalEarnings = req.user.adminBalance.totalEarnings;
+      } else {
+        const earnings = await storage.getCreatorEarnings(req.user.id);
+        if (!earnings || earnings.availableBalance <= 0) {
+          return res.status(400).json({ error: "No available balance to withdraw" });
+        }
+        availableBalance = earnings.availableBalance;
+        totalEarnings = earnings.totalEarnings;
+      }
+
+      if (availableBalance <= 0) {
         return res.status(400).json({ error: "No available balance to withdraw" });
       }
 
       const adminName = req.user.username || req.user.email || "Unknown Admin";
-      
+
       await sendWithdrawRequestEmail({
         adminName,
         adminEmail: req.user.email,
         adminUsername: req.user.username,
         whopUserId: req.user.whopUserId,
-        amount: earnings.availableBalance,
-        availableBalance: earnings.availableBalance,
-        totalEarnings: earnings.totalEarnings,
+        amount: availableBalance,
+        availableBalance,
+        totalEarnings,
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "Withdraw request sent successfully",
-        amount: earnings.availableBalance,
+        amount: availableBalance,
       });
     } catch (error) {
       console.error("Failed to process withdraw request:", error);

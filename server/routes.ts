@@ -122,8 +122,7 @@ export async function registerRoutes(
       }
 
       const courses = await storage.getCoursesByCreator(req.user.id);
-      const earnings = await storage.getCreatorEarnings(req.user.id);
-      
+
       const coursesWithStats = await Promise.all(
         courses.map(async (course) => {
           const courseWithModules = await storage.getCourseWithModules(course.id);
@@ -137,22 +136,36 @@ export async function registerRoutes(
         })
       );
 
+      // For admin users (platform owners), use adminBalance
+      // For creator users (course creators), use CreatorEarnings
+      let earnings;
+      if (req.user.role === "admin" && req.user.adminBalance) {
+        earnings = {
+          totalEarnings: req.user.adminBalance.totalEarnings,
+          availableBalance: req.user.adminBalance.availableBalance,
+          pendingBalance: 0, // Admin balance doesn't have pending balance
+        };
+      } else {
+        const creatorEarnings = await storage.getCreatorEarnings(req.user.id);
+        earnings = creatorEarnings ? {
+          totalEarnings: creatorEarnings.totalEarnings,
+          availableBalance: creatorEarnings.availableBalance,
+          pendingBalance: creatorEarnings.pendingBalance,
+        } : {
+          totalEarnings: 0,
+          availableBalance: 0,
+          pendingBalance: 0,
+        };
+      }
+
       res.json({
         user: req.user,
         courses: coursesWithStats,
         companyId: req.params.companyId,
-        earnings: earnings ? { 
-          totalEarnings: earnings.totalEarnings, 
-          availableBalance: earnings.availableBalance,
-          pendingBalance: earnings.pendingBalance 
-        } : { 
-          totalEarnings: 0, 
-          availableBalance: 0,
-          pendingBalance: 0 
-        },
+        earnings,
       });
     } catch {
-      
+
       res.status(500).json({ error: "Failed to load dashboard" });
     }
   });
@@ -163,28 +176,42 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
-      const earnings = await storage.getCreatorEarnings(req.user.id);
-      
-      if (!earnings || earnings.availableBalance <= 0) {
+      // For admin users, use adminBalance; for creators, use CreatorEarnings
+      let availableBalance: number;
+      let totalEarnings: number;
+
+      if (req.user.role === "admin" && req.user.adminBalance) {
+        availableBalance = req.user.adminBalance.availableBalance;
+        totalEarnings = req.user.adminBalance.totalEarnings;
+      } else {
+        const earnings = await storage.getCreatorEarnings(req.user.id);
+        if (!earnings || earnings.availableBalance <= 0) {
+          return res.status(400).json({ error: "No available balance to withdraw" });
+        }
+        availableBalance = earnings.availableBalance;
+        totalEarnings = earnings.totalEarnings;
+      }
+
+      if (availableBalance <= 0) {
         return res.status(400).json({ error: "No available balance to withdraw" });
       }
 
       const adminName = req.user.username || req.user.email || "Unknown Admin";
-      
+
       await sendWithdrawRequestEmail({
         adminName,
         adminEmail: req.user.email,
         adminUsername: req.user.username,
         whopUserId: req.user.whopUserId,
-        amount: earnings.availableBalance,
-        availableBalance: earnings.availableBalance,
-        totalEarnings: earnings.totalEarnings,
+        amount: availableBalance,
+        availableBalance,
+        totalEarnings,
       });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: "Withdraw request sent successfully",
-        amount: earnings.availableBalance,
+        amount: availableBalance,
       });
     } catch (error) {
       console.error("Failed to process withdraw request:", error);
@@ -839,23 +866,34 @@ export async function registerRoutes(
           })
         );
 
-        // Get creator earnings
-        const earnings = await storage.getCreatorEarnings(userId);
+        // For admin users (platform owners), use adminBalance
+        // For creator users (course creators), use CreatorEarnings
+        let earnings;
+        if (req.user.role === "admin" && req.user.adminBalance) {
+          earnings = {
+            totalEarnings: req.user.adminBalance.totalEarnings,
+            availableBalance: req.user.adminBalance.availableBalance,
+            pendingBalance: 0, // Admin balance doesn't have pending balance
+          };
+        } else {
+          const creatorEarnings = await storage.getCreatorEarnings(userId);
+          earnings = creatorEarnings ? {
+            totalEarnings: creatorEarnings.totalEarnings,
+            availableBalance: creatorEarnings.availableBalance,
+            pendingBalance: creatorEarnings.pendingBalance,
+          } : {
+            totalEarnings: 0,
+            availableBalance: 0,
+            pendingBalance: 0,
+          };
+        }
 
         res.json({
           user: req.user,
           courses: coursesWithStats,
           experienceId: req.params.experienceId,
           accessLevel: req.accessLevel,
-          earnings: earnings ? { 
-            totalEarnings: earnings.totalEarnings,
-            availableBalance: earnings.availableBalance,
-            pendingBalance: earnings.pendingBalance 
-          } : { 
-            totalEarnings: "0",
-            availableBalance: 0,
-            pendingBalance: 0 
-          },
+          earnings,
         });
       } else {
         // Customer view - show published courses + unpublished courses user has access to

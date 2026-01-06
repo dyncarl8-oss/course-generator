@@ -106,7 +106,7 @@ const userSchema = new Schema<IUser>({
   profilePicUrl: { type: String },
   role: { type: String, default: "member", required: true },
   whopCompanyId: { type: String },
-  adminBalance: { type: adminBalanceSchema, default: () => ({}) },
+  adminBalance: { type: adminBalanceSchema },
   createdAt: { type: Date, default: Date.now, required: true },
 });
 
@@ -215,6 +215,11 @@ export type User = {
   profilePicUrl: string | null;
   role: string;
   whopCompanyId: string | null;
+  adminBalance?: {
+    totalEarnings: number;
+    availableBalance: number;
+    updatedAt: Date;
+  };
   createdAt: Date;
 };
 

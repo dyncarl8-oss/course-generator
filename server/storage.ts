@@ -27,6 +27,7 @@ function docToUser(doc: any): User {
     profilePicUrl: doc.profilePicUrl || null,
     role: doc.role,
     whopCompanyId: doc.whopCompanyId || null,
+    adminBalance: doc.adminBalance || undefined,
     createdAt: doc.createdAt,
   };
 }

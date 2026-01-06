@@ -172,7 +172,10 @@ export async function registerRoutes(
           return res.status(401).json({ error: "User not found" });
         }
 
-        const courses = await storage.getCoursesByCreator(req.user.id);
+        const courses = await storage.getCoursesByCreator(
+          req.user.id,
+          req.params.companyId,
+        );
 
         const coursesWithStats = await Promise.all(
           courses.map(async (course) => {
@@ -443,6 +446,7 @@ export async function registerRoutes(
         // Create course with "generating" status if lesson images will be generated
         const course = await storage.createCourse({
           creatorId: req.user.id,
+          whopCompanyId: companyId,
           title: validated.data.course_title,
           description: validated.data.description || null,
           coverImage: coverImage || null,
@@ -1116,7 +1120,7 @@ export async function registerRoutes(
           }
 
           const userId = req.user.id;
-          const courses = await storage.getCoursesByCreator(userId);
+          const courses = await storage.getCoursesByCreator(userId, companyId || undefined);
           const coursesWithStats = await Promise.all(
             courses.map(async (course) => {
               const courseWithModules = await storage.getCourseWithModules(

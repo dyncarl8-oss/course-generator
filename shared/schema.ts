@@ -20,6 +20,7 @@ export interface IUser extends Document {
 export interface ICourse extends Document {
   _id: string;
   creatorId: string;
+  whopCompanyId?: string;
   title: string;
   description?: string;
   coverImage?: string;
@@ -115,6 +116,7 @@ userSchema.index({ whopCompanyId: 1 });
 const courseSchema = new Schema<ICourse>({
   _id: { type: String, required: true },
   creatorId: { type: String, required: true },
+  whopCompanyId: { type: String },
   title: { type: String, required: true },
   description: { type: String },
   coverImage: { type: String },
@@ -127,6 +129,7 @@ const courseSchema = new Schema<ICourse>({
 });
 
 courseSchema.index({ creatorId: 1 });
+courseSchema.index({ whopCompanyId: 1 });
 courseSchema.index({ published: 1 });
 
 const moduleSchema = new Schema<IModule>({
@@ -226,6 +229,7 @@ export type User = {
 export type Course = {
   id: string;
   creatorId: string;
+  whopCompanyId: string | null;
   title: string;
   description: string | null;
   coverImage: string | null;
@@ -285,6 +289,7 @@ export type InsertUser = {
 
 export type InsertCourse = {
   creatorId: string;
+  whopCompanyId?: string | null;
   title: string;
   description?: string | null;
   coverImage?: string | null;
@@ -369,6 +374,7 @@ export const insertUserSchema = z.object({
 
 export const insertCourseSchema = z.object({
   creatorId: z.string(),
+  whopCompanyId: z.string().nullish(),
   title: z.string(),
   description: z.string().nullish(),
   coverImage: z.string().nullish(),

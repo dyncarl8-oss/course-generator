@@ -1445,6 +1445,7 @@ export async function registerRoutes(
         // Create course with "generating" status if lesson images will be generated
         const course = await storage.createCourse({
           creatorId: req.user!.id,
+          whopCompanyId: companyId,
           title: validated.data.course_title,
           description: validated.data.description || null,
           coverImage: coverImage || null,

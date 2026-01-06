@@ -1488,7 +1488,7 @@ export async function registerRoutes(
       }
 
       const checkoutResult = await createCheckoutConfiguration(
-        parseFloat(course.price || "0"),
+        0, // Set to 0 for testing payment flow without actual payment
         {
           courseId: course.id,
           buyerId: req.user.id,

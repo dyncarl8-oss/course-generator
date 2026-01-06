@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -59,6 +60,13 @@ app.use((req, res, next) => {
 
 (async () => {
   await connectDB();
+
+  try {
+    await storage.ensureUserBalanceFields();
+  } catch (error) {
+    console.error("Failed to backfill user balance fields:", error);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

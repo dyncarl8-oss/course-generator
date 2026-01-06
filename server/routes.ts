@@ -104,7 +104,8 @@ async function requireAdmin(
       const updates: any = {};
       let needsUpdate = false;
 
-      if (req.user.role !== "creator" && req.user.role !== "admin") {
+      // Platform admins keep their admin role; others become creators
+      if (req.user.role !== "admin" && req.user.role !== "creator") {
         updates.role = "creator";
         needsUpdate = true;
       }
@@ -1091,22 +1092,22 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        const isAdmin = req.accessLevel === "admin";
+        // Platform admins should always see the admin view, even if Whop reports them as "customer"
+        // This is because platform admins are "customers" of their own experiences in Whop's model
+        const isPlatformAdmin = req.user?.role === "admin";
+        const isAdmin = req.accessLevel === "admin" || isPlatformAdmin;
 
         if (isAdmin && req.user) {
           // Admin view - show all courses with management stats
-          // Set the admin's company ID if not already set
+          // Set the admin's company ID to associate courses with this experience's company
           const companyId = await getCompanyIdFromExperience(
             req.params.experienceId,
           );
-          if (companyId && !req.user.whopCompanyId) {
+          if (companyId) {
             await storage.updateUser(req.user.id, {
-              role: "creator",
+              role: "admin", // Keep role as admin for platform admins
               whopCompanyId: companyId,
             });
-            req.user = await storage.getUser(req.user.id);
-          } else if (req.user.role !== "creator") {
-            await storage.updateUser(req.user.id, { role: "creator" });
             req.user = await storage.getUser(req.user.id);
           }
 
@@ -1262,7 +1263,9 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        if (req.accessLevel !== "admin") {
+        // Allow both Whop admins and platform admins
+        const isPlatformAdmin = req.user?.role === "admin";
+        if (req.accessLevel !== "admin" && !isPlatformAdmin) {
           return res.status(403).json({ error: "Admin access required" });
         }
 
@@ -1285,7 +1288,9 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        if (req.accessLevel !== "admin") {
+        // Allow both Whop admins and platform admins
+        const isPlatformAdmin = req.user?.role === "admin";
+        if (req.accessLevel !== "admin" && !isPlatformAdmin) {
           return res.status(403).json({ error: "Admin access required" });
         }
 
@@ -1315,7 +1320,9 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        if (req.accessLevel !== "admin") {
+        // Allow both Whop admins and platform admins
+        const isPlatformAdmin = req.user?.role === "admin";
+        if (req.accessLevel !== "admin" && !isPlatformAdmin) {
           return res.status(403).json({ error: "Admin access required" });
         }
 
@@ -1402,7 +1409,9 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        if (req.accessLevel !== "admin") {
+        // Allow both Whop admins and platform admins
+        const isPlatformAdmin = req.user?.role === "admin";
+        if (req.accessLevel !== "admin" && !isPlatformAdmin) {
           return res.status(403).json({ error: "Admin access required" });
         }
 
@@ -1410,16 +1419,13 @@ export async function registerRoutes(
           return res.status(401).json({ error: "User not found" });
         }
 
-        // Ensure user is marked as creator and has company ID set
+        // Ensure user has company ID set for this experience
         const companyId = await getCompanyIdFromExperience(
           req.params.experienceId,
         );
-        if (
-          companyId &&
-          (!req.user.whopCompanyId || req.user.role !== "creator")
-        ) {
+        if (companyId) {
           await storage.updateUser(req.user.id, {
-            role: "creator",
+            role: req.user.role === "admin" ? "admin" : "creator",
             whopCompanyId: companyId,
           });
           req.user = await storage.getUser(req.user.id);
@@ -1689,7 +1695,9 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        if (req.accessLevel !== "admin") {
+        // Allow both Whop admins and platform admins
+        const isPlatformAdmin = req.user?.role === "admin";
+        if (req.accessLevel !== "admin" && !isPlatformAdmin) {
           return res.status(403).json({ error: "Admin access required" });
         }
 
@@ -1725,7 +1733,9 @@ export async function registerRoutes(
     requireExperienceAccess,
     async (req: AuthenticatedRequest, res) => {
       try {
-        if (req.accessLevel !== "admin") {
+        // Allow both Whop admins and platform admins
+        const isPlatformAdmin = req.user?.role === "admin";
+        if (req.accessLevel !== "admin" && !isPlatformAdmin) {
           return res.status(403).json({ error: "Admin access required" });
         }
 

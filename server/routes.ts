@@ -72,12 +72,24 @@ async function requireAdmin(req: AuthenticatedRequest, res: Response, next: Next
     
     req.accessLevel = access.access_level;
     
-    if (req.user && req.user.role !== "creator") {
-      await storage.updateUser(req.user.id, { 
-        role: "creator", 
-        whopCompanyId: companyId 
-      });
-      req.user = await storage.getUser(req.user.id);
+    if (req.user) {
+      const updates: any = {};
+      let needsUpdate = false;
+
+      if (req.user.role !== "creator" && req.user.role !== "admin") {
+        updates.role = "creator";
+        needsUpdate = true;
+      }
+
+      if (req.user.whopCompanyId !== companyId) {
+        updates.whopCompanyId = companyId;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        await storage.updateUser(req.user.id, updates);
+        req.user = await storage.getUser(req.user.id);
+      }
     }
     
     next();

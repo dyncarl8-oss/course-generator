@@ -8,9 +8,13 @@ import { generatedCourseSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { sendWithdrawRequestEmail } from "./resend";
 
-interface AuthenticatedRequest extends Request {
+// Custom type for requests that have been authenticated with Whop
+// We extend any as a fallback if express types are not properly loaded
+// Custom type for requests that have been authenticated with Whop
+interface AuthenticatedRequest {
+  [key: string]: any;
   whopUserId?: string;
-  user?: Awaited<ReturnType<typeof storage.getUser>>;
+  user?: any;
   accessLevel?: "admin" | "customer" | "no_access";
 }
 
@@ -127,7 +131,7 @@ export async function registerRoutes(
     res.json(req.user);
   });
 
-  app.get("/api/dashboard/:companyId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/dashboard/:companyId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });
@@ -136,13 +140,13 @@ export async function registerRoutes(
       const courses = await storage.getCoursesByCreator(req.user.id, req.params.companyId);
 
       const coursesWithStats = await Promise.all(
-        courses.map(async (course) => {
+        courses.map(async (course: any) => {
           const courseWithModules = await storage.getCourseWithModules(course.id);
           const access = await storage.getCourseAccessByCourse(course.id);
           return {
             ...course,
             moduleCount: courseWithModules?.modules.length || 0,
-            lessonCount: courseWithModules?.modules.reduce((acc, m) => acc + m.lessons.length, 0) || 0,
+            lessonCount: courseWithModules?.modules.reduce((acc: number, m: any) => acc + m.lessons.length, 0) || 0,
             studentCount: access.length,
           };
         })
@@ -182,7 +186,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/dashboard/:companyId/withdraw-request", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/dashboard/:companyId/withdraw-request", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });
@@ -251,7 +255,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/dashboard/:companyId/courses/generate", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/dashboard/:companyId/courses/generate", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const { topic } = req.body;
 
@@ -267,7 +271,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/dashboard/:companyId/courses/generate-image", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/dashboard/:companyId/courses/generate-image", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const { courseTitle } = req.body;
 
@@ -288,7 +292,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/generate-image-prompt", async (req, res) => {
+  app.post("/api/generate-image-prompt", async (req: any, res: any) => {
     try {
       const { courseTitle } = req.body;
 
@@ -304,7 +308,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/generate-course-image", async (req, res) => {
+  app.post("/api/generate-course-image", async (req: any, res: any) => {
     try {
       const { courseTitle } = req.body;
 
@@ -326,7 +330,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/generate-course-media-plan", async (req, res) => {
+  app.post("/api/generate-course-media-plan", async (req: any, res: any) => {
     try {
       const { courseTitle, modules } = req.body;
 
@@ -344,7 +348,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/dashboard/:companyId/courses", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/dashboard/:companyId/courses", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });
@@ -374,7 +378,7 @@ export async function registerRoutes(
       const createdLessons: { moduleIndex: number; lessonIndex: number; lessonId: string }[] = [];
 
       // Create all modules in parallel for faster response
-      const modulePromises = validated.data.modules.map((moduleData, i) =>
+      const modulePromises = validated.data.modules.map((moduleData, i: number) =>
         storage.createModule({
           courseId: course.id,
           title: moduleData.module_title,
@@ -405,7 +409,7 @@ export async function registerRoutes(
       console.log("generateLessonImages flag:", generateLessonImages);
       if (generateLessonImages) {
         // Process images asynchronously without blocking the response
-        setImmediate(async () => {
+        setTimeout(async () => {
           try {
             console.log("=== Starting background lesson image generation for course:", validated.data.course_title);
             console.log("Modules to process:", validated.data.modules.length);
@@ -543,7 +547,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const course = await storage.getCourseWithModules(req.params.courseId);
 
@@ -551,8 +555,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Course not found" });
       }
 
-      if (course.creatorId !== req.user?.id) {
-        return res.status(403).json({ error: "Not your course" });
+      if (course.creatorId !== req.user?.id || course.whopCompanyId !== req.params.companyId) {
+        return res.status(403).json({ error: "Access denied or course not found in this company" });
       }
 
       res.json(course);
@@ -562,7 +566,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const course = await storage.getCourse(req.params.courseId);
 
@@ -570,8 +574,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Course not found" });
       }
 
-      if (course.creatorId !== req.user?.id) {
-        return res.status(403).json({ error: "Not your course" });
+      if (course.creatorId !== req.user?.id || course.whopCompanyId !== req.params.companyId) {
+        return res.status(403).json({ error: "Access denied or course not found in this company" });
       }
 
       const { title, description, published, isFree, price, coverImage } = req.body;
@@ -592,7 +596,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.delete("/api/dashboard/:companyId/courses/:courseId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const course = await storage.getCourse(req.params.courseId);
 
@@ -600,8 +604,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Course not found" });
       }
 
-      if (course.creatorId !== req.user?.id) {
-        return res.status(403).json({ error: "Not your course" });
+      if (course.creatorId !== req.user?.id || course.whopCompanyId !== req.params.companyId) {
+        return res.status(403).json({ error: "Access denied or course not found in this company" });
       }
 
       await storage.deleteCourse(course.id);
@@ -612,7 +616,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/dashboard/:companyId/modules/:moduleId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/dashboard/:companyId/modules/:moduleId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const module = await storage.getModule(req.params.moduleId);
       if (!module) {
@@ -628,7 +632,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/dashboard/:companyId/modules/:moduleId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.delete("/api/dashboard/:companyId/modules/:moduleId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       await storage.deleteModule(req.params.moduleId);
       res.json({ success: true });
@@ -638,7 +642,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/dashboard/:companyId/lessons/:lessonId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/dashboard/:companyId/lessons/:lessonId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const lesson = await storage.getLesson(req.params.lessonId);
       if (!lesson) {
@@ -658,7 +662,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/dashboard/:companyId/lessons/:lessonId/media", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/dashboard/:companyId/lessons/:lessonId/media", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const lesson = await storage.getLesson(req.params.lessonId);
       if (!lesson) {
@@ -794,15 +798,15 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/dashboard/:companyId/courses/:courseId/analytics", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/dashboard/:companyId/courses/:courseId/analytics", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
     try {
       const course = await storage.getCourse(req.params.courseId);
       if (!course) {
         return res.status(404).json({ error: "Course not found" });
       }
 
-      if (course.creatorId !== req.user?.id) {
-        return res.status(403).json({ error: "Not your course" });
+      if (course.creatorId !== req.user?.id || course.whopCompanyId !== req.params.companyId) {
+        return res.status(403).json({ error: "Access denied or course not found in this company" });
       }
 
       const [access, payments] = await Promise.all([
@@ -811,7 +815,7 @@ export async function registerRoutes(
       ]);
 
       const paymentsByUser = new Map(payments.map(p => [p.buyerId, p]));
-      const totalEarnings = payments.reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
+      const totalEarnings = payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || "0"), 0);
 
       // Fetch profile pictures from Whop for users who don't have them
       const studentsWithPics = await Promise.all(
@@ -884,7 +888,7 @@ export async function registerRoutes(
         }
 
         const userId = req.user.id;
-        const courses = await storage.getCoursesByCreator(userId);
+        const courses = await storage.getCoursesByCreator(userId, companyId || "");
         const coursesWithStats = await Promise.all(
           courses.map(async (course) => {
             const courseWithModules = await storage.getCourseWithModules(course.id);
@@ -892,7 +896,7 @@ export async function registerRoutes(
             return {
               ...course,
               moduleCount: courseWithModules?.modules.length || 0,
-              lessonCount: courseWithModules?.modules.reduce((acc, m) => acc + m.lessons.length, 0) || 0,
+              lessonCount: courseWithModules?.modules.reduce((acc: number, m: any) => acc + m.lessons.length, 0) || 0,
               studentCount: access.length,
               hasAccess: true,
             };
@@ -1001,7 +1005,7 @@ export async function registerRoutes(
   });
 
   // Admin routes for experience context
-  app.post("/api/experiences/:experienceId/courses/generate", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/courses/generate", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -1020,7 +1024,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/experiences/:experienceId/courses/generate-image", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/courses/generate-image", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -1045,7 +1049,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/experiences/:experienceId/withdraw-request", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/withdraw-request", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -1118,7 +1122,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/experiences/:experienceId/courses", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/courses", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -1148,6 +1152,7 @@ export async function registerRoutes(
       // Create course with "generating" status if lesson images will be generated
       const course = await storage.createCourse({
         creatorId: req.user!.id,
+        whopCompanyId: companyId || "",
         title: validated.data.course_title,
         description: validated.data.description || null,
         coverImage: coverImage || null,
@@ -1160,7 +1165,7 @@ export async function registerRoutes(
       const createdLessons: { moduleIndex: number; lessonIndex: number; lessonId: string }[] = [];
 
       // Create all modules in parallel for faster response
-      const modulePromises = validated.data.modules.map(async (moduleData, i) => {
+      const modulePromises = validated.data.modules.map(async (moduleData: any, i: number) => {
         const module = await storage.createModule({
           courseId: course.id,
           title: moduleData.module_title,
@@ -1190,7 +1195,7 @@ export async function registerRoutes(
       console.log("generateLessonImages flag:", generateLessonImages);
       if (generateLessonImages) {
         // Process images asynchronously without blocking the response
-        setImmediate(async () => {
+        setTimeout(async () => {
           try {
             console.log("=== Starting background lesson image generation for course:", validated.data.course_title);
             console.log("Modules to process:", validated.data.modules.length);
@@ -1328,7 +1333,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.patch("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -1339,8 +1344,9 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Course not found" });
       }
 
-      if (course.creatorId !== req.user?.id) {
-        return res.status(403).json({ error: "Not your course" });
+      const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+      if (course.creatorId !== req.user?.id || course.whopCompanyId !== companyId) {
+        return res.status(403).json({ error: "Access denied or course not found in this company" });
       }
 
       const { title, description, published, isFree, price } = req.body;
@@ -1360,7 +1366,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.delete("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {
         return res.status(403).json({ error: "Admin access required" });
@@ -1371,8 +1377,9 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Course not found" });
       }
 
-      if (course.creatorId !== req.user?.id) {
-        return res.status(403).json({ error: "Not your course" });
+      const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+      if (course.creatorId !== req.user?.id || course.whopCompanyId !== companyId) {
+        return res.status(403).json({ error: "Access denied or course not found in this company" });
       }
 
       await storage.deleteCourse(course.id);
@@ -1383,7 +1390,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.get("/api/experiences/:experienceId/courses/:courseId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       const course = await storage.getCourseWithModules(req.params.courseId);
 
@@ -1420,7 +1427,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/experiences/:experienceId/courses/:courseId/access", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/courses/:courseId/access", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });
@@ -1468,7 +1475,7 @@ export async function registerRoutes(
   }>();
   const TTS_CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
-  app.post("/api/experiences/:experienceId/lessons/:lessonId/tts", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/lessons/:lessonId/tts", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       const lesson = await storage.getLesson(req.params.lessonId);
 
@@ -1507,7 +1514,7 @@ export async function registerRoutes(
   });
 
   // Create checkout for paid course
-  app.post("/api/experiences/:experienceId/courses/:courseId/checkout", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/experiences/:experienceId/courses/:courseId/checkout", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });
@@ -1546,7 +1553,7 @@ export async function registerRoutes(
         courseId: course.id,
         buyerId: req.user.id,
         creatorId: course.creatorId,
-        amount: course.price || "0",
+        amount: parseFloat(course.price || "0"),
         whopCheckoutId: checkoutResult.checkoutId,
         status: "pending",
       });
@@ -1559,7 +1566,7 @@ export async function registerRoutes(
   });
 
   // Payment verification endpoint (Option 2 - called from frontend onComplete)
-  app.post("/api/payments/:checkoutId/verify", authenticateWhop, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/payments/:checkoutId/verify", authenticateWhop, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });

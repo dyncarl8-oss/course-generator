@@ -11,6 +11,7 @@ import {
   type CourseWithModules
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import process from "process";
 
 interface AdminBalance {
   totalEarnings: number;
@@ -273,7 +274,7 @@ export class DatabaseStorage implements IStorage {
       lessonsByModule.get(moduleId)!.push(lesson);
     }
 
-    const modulesWithLessons = moduleDocs.map(moduleDoc => ({
+    const modulesWithLessons = moduleDocs.map((moduleDoc: any) => ({
       ...docToModule(moduleDoc),
       lessons: (lessonsByModule.get(moduleDoc._id) || []).map(docToLesson),
     }));
@@ -440,9 +441,9 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
 
-    const userIds = accessDocs.map(a => a.userId);
+    const userIds = accessDocs.map((a: any) => a.userId);
     const userDocs = await UserModel.find({ _id: { $in: userIds } });
-    const userMap = new Map(userDocs.map(u => [u._id, u]));
+    const userMap = new Map(userDocs.map((u: any) => [u._id, u]));
 
     const result: (CourseAccess & { user: User })[] = [];
     for (const accessDoc of accessDocs) {

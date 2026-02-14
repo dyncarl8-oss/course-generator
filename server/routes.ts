@@ -1201,6 +1201,64 @@ export async function registerRoutes(
     }
   });
 
+  // Async version for experiences to handle timeouts
+  app.post("/api/experiences/:experienceId/courses/generate-async", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
+    try {
+      if (req.accessLevel !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { topic } = req.body;
+      if (!topic || typeof topic !== "string") {
+        return res.status(400).json({ error: "Topic is required" });
+      }
+
+      const jobId = randomUUID();
+      generationJobs.set(jobId, {
+        status: "pending",
+        createdAt: Date.now(),
+      });
+
+      // Start generation in background
+      (async () => {
+        try {
+          console.log(`[Job ${jobId}] Starting background generation for topic: ${topic}`);
+          const result = await generateCourse(topic);
+          generationJobs.set(jobId, {
+            status: "completed",
+            result,
+            createdAt: Date.now(),
+          });
+          console.log(`[Job ${jobId}] Background generation completed`);
+        } catch (error: any) {
+          console.error(`[Job ${jobId}] Background generation failed:`, error);
+          generationJobs.set(jobId, {
+            status: "failed",
+            error: error.message || "Failed to generate course",
+            createdAt: Date.now(),
+          });
+        }
+      })();
+
+      res.json({ jobId });
+    } catch (error) {
+      console.error("Async generation error:", error);
+      res.status(500).json({ error: "Failed to initiate generation" });
+    }
+  });
+
+  app.get("/api/experiences/:experienceId/courses/generate-status/:jobId", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
+    const { jobId } = req.params;
+    const job = generationJobs.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    res.json(job);
+  });
+
+
   app.post("/api/experiences/:experienceId/courses/generate-image", authenticateWhop, requireExperienceAccess, async (req: AuthenticatedRequest, res: any) => {
     try {
       if (req.accessLevel !== "admin") {

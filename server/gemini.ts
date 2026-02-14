@@ -90,7 +90,10 @@ async function generateWithFallback(options: GenerateOptions) {
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
-        config: Object.keys(config).length > 0 ? config : undefined,
+        config: {
+          ...config,
+          maxOutputTokens: 8192,
+        },
       });
 
       // Check for empty text response and treat it as a failure to trigger next model/retry
@@ -141,8 +144,10 @@ export async function generateCourse(topic: string): Promise<GeneratedCourse> {
   COURSE STRUCTURE:
   - 6-10 modules for maximum curriculum depth.
   - 3-5 lessons per module.
-  - Each lesson: 5-8 paragraphs of DEPTH educational content. Be very detailed, use professional analogies, and provide real-world examples.
+  - Each lesson: 5-8 paragraphs of DEPTH educational content. Be very detailed but concise to fit within limits.
   - At the end of EACH module, include a "quiz" with 3-5 high-quality multiple-choice questions.
+
+  IMPORTANT: The total response MUST be within 8192 tokens. Use dense, high-value language and avoid filler to ensure the full JSON is generated.
 
     CRITICAL: You MUST respond ONLY with a single valid JSON object. No explanation or preamble.
   JSON SCHEMA:
@@ -354,6 +359,8 @@ Create a comprehensive module with:
 5. Reference specific current tools or platforms by name
 6. Include a "quiz" with 3-5 questions.
 
+IMPORTANT: Keep the response high-value but concise to stay within the 8192 token limit.
+
 **CRITICAL: Your entire response MUST be valid JSON only. Start with { and end with }. No text, no explanation, no markdown. Every character must be JSON.**
 
 {
@@ -438,6 +445,8 @@ Create a comprehensive lesson with:
 3. Include specific, current examples, tips, and practical advice
 4. Reference specific tools, platforms, or resources by name where appropriate
 5. Ensure content is high-value and provides a significant learning transformation
+
+IMPORTANT: Keep the response high-value but concise to stay within the 8192 token limit.
 
 **CRITICAL: Your entire response MUST be valid JSON only. Start with { and end with }. No text, no explanation, no markdown. Every character must be JSON.**
 

@@ -8,6 +8,25 @@ import { generatedCourseSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { sendWithdrawRequestEmail } from "./resend";
 
+// In-memory store for background generation jobs
+interface GenerationJob {
+  status: "pending" | "completed" | "failed";
+  result?: any;
+  error?: string;
+  createdAt: number;
+}
+const generationJobs = new Map<string, GenerationJob>();
+
+// Cleanup old jobs every hour
+setInterval(() => {
+  const oneHourAgo = Date.now() - (1000 * 60 * 60);
+  for (const [id, job] of generationJobs.entries()) {
+    if (job.createdAt < oneHourAgo) {
+      generationJobs.delete(id);
+    }
+  }
+}, 1000 * 60 * 60);
+
 // Custom type for requests that have been authenticated with Whop
 // We extend any as a fallback if express types are not properly loaded
 // Custom type for requests that have been authenticated with Whop
@@ -287,10 +306,64 @@ export async function registerRoutes(
 
       const generatedCourse = await generateCourse(topic);
       res.json(generatedCourse);
-    } catch {
-
+    } catch (error: any) {
+      console.error("Generation error:", error);
       res.status(500).json({ error: "Failed to generate course" });
     }
+  });
+
+  // Async version to handle timeouts
+  app.post("/api/dashboard/:companyId/courses/generate-async", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
+    try {
+      const { topic } = req.body;
+
+      if (!topic || typeof topic !== "string") {
+        return res.status(400).json({ error: "Topic is required" });
+      }
+
+      const jobId = randomUUID();
+      generationJobs.set(jobId, {
+        status: "pending",
+        createdAt: Date.now(),
+      });
+
+      // Start generation in background
+      (async () => {
+        try {
+          console.log(`[Job ${jobId}] Starting background generation for topic: ${topic}`);
+          const result = await generateCourse(topic);
+          generationJobs.set(jobId, {
+            status: "completed",
+            result,
+            createdAt: Date.now(),
+          });
+          console.log(`[Job ${jobId}] Background generation completed`);
+        } catch (error: any) {
+          console.error(`[Job ${jobId}] Background generation failed:`, error);
+          generationJobs.set(jobId, {
+            status: "failed",
+            error: error.message || "Failed to generate course",
+            createdAt: Date.now(),
+          });
+        }
+      })();
+
+      res.json({ jobId });
+    } catch (error) {
+      console.error("Async generation error:", error);
+      res.status(500).json({ error: "Failed to initiate generation" });
+    }
+  });
+
+  app.get("/api/dashboard/:companyId/courses/generate-status/:jobId", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {
+    const { jobId } = req.params;
+    const job = generationJobs.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    res.json(job);
   });
 
   app.post("/api/dashboard/:companyId/courses/generate-image", authenticateWhop, requireAdmin, async (req: AuthenticatedRequest, res: any) => {

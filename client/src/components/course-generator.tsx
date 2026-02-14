@@ -45,21 +45,71 @@ export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGen
     setIsGenerating(true);
     setIsGenerationComplete(false);
     try {
-      const response = await fetch(`${basePath}/courses/generate`, {
+      // Step 1: Start async generation job
+      const startResponse = await fetch(`${basePath}/courses/generate-async`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ topic: topic.trim() }),
       });
 
-      if (!response.ok) {
-        if (response.status === 403) {
+      if (!startResponse.ok) {
+        if (startResponse.status === 403) {
           throw new Error("Permission denied. Please refresh or check your account permissions.");
         }
-        throw new Error("Please try generating the course again.");
+        throw new Error("Failed to start course generation. Please try again.");
       }
 
-      const generatedCourse = await response.json();
+      const { jobId } = await startResponse.json();
+
+      // Step 2: Poll for completion
+      const POLL_INTERVAL = 3000; // 3 seconds
+      const MAX_POLL_TIME = 5 * 60 * 1000; // 5 minutes max
+      const startTime = Date.now();
+
+      const pollForResult = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+          const poll = async () => {
+            if (Date.now() - startTime > MAX_POLL_TIME) {
+              reject(new Error("Generation timed out. The AI is taking too long. Please try again."));
+              return;
+            }
+
+            try {
+              const statusResponse = await fetch(`${basePath}/courses/generate-status/${jobId}`, {
+                credentials: "include",
+              });
+
+              if (!statusResponse.ok) {
+                reject(new Error("Failed to check generation status."));
+                return;
+              }
+
+              const job = await statusResponse.json();
+
+              if (job.status === "completed") {
+                resolve(job.result);
+                return;
+              }
+
+              if (job.status === "failed") {
+                reject(new Error(job.error || "Course generation failed. Please try again."));
+                return;
+              }
+
+              // Still pending, poll again
+              setTimeout(poll, POLL_INTERVAL);
+            } catch (err) {
+              // Network error during polling — retry silently
+              setTimeout(poll, POLL_INTERVAL);
+            }
+          };
+
+          poll();
+        });
+      };
+
+      const generatedCourse = await pollForResult();
       setIsGenerationComplete(true);
       onGenerated(generatedCourse);
       toast({
@@ -71,14 +121,10 @@ export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGen
       setIsGenerating(false);
       setIsGenerationComplete(false);
 
-      const isTimeout = error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('fetch');
-
       toast({
-        title: isTimeout ? "Still generating..." : "Generation failed",
-        description: isTimeout
-          ? "The AI is still researching. Please wait a few more moments and try matching the topic again if it doesn't appear."
-          : (error.message || "Please try again."),
-        variant: isTimeout ? "default" : "destructive",
+        title: "Generation failed",
+        description: error.message || "Please try again.",
+        variant: "destructive",
       });
     }
   };

@@ -498,7 +498,7 @@ export const generatedCourseSchema = z.object({
         correctAnswer: z.number(),
         explanation: z.string().optional(),
       })),
-    }).optional(),
+    }),
   })),
 });
 

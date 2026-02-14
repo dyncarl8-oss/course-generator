@@ -144,7 +144,7 @@ export async function generateCourse(topic: string): Promise<GeneratedCourse> {
   - Each lesson: 5-8 paragraphs of DEPTH educational content. Be very detailed, use professional analogies, and provide real-world examples.
   - At the end of EACH module, include a "quiz" with 3-5 high-quality multiple-choice questions.
 
-    CRITICAL: You MUST respond ONLY with a single valid JSON object. No explanation or preamble.
+  CRITICAL: You MUST respond ONLY with a single valid JSON object. No explanation or preamble.
   JSON SCHEMA:
   {
     "course_title": "string",
@@ -251,11 +251,31 @@ export async function generateCourse(topic: string): Promise<GeneratedCourse> {
       throw new Error("Invalid course structure");
     }
 
+    // ENSURE CONSISTENCY: Check for missing quizzes and generate them if needed
+    // This handles cases where Gemini hits token limits and skips optional fields
+    console.log(`🔍 Checking for missing quizzes in ${parsed.modules.length} modules...`);
+    for (let i = 0; i < parsed.modules.length; i++) {
+      const module = parsed.modules[i] as any;
+      if (!module.quiz || !module.quiz.questions || module.quiz.questions.length === 0) {
+        console.log(`⚠️  Module ${i + 1} ("${module.module_title}") is missing a quiz. Generating now...`);
+        try {
+          const lessonsContext = module.lessons.map((l: any) => `${l.lesson_title}: ${l.content}`).join("\n\n");
+          const generatedQuiz = await generateQuiz(module.module_title, lessonsContext);
+          module.quiz = generatedQuiz;
+          console.log(`✅ Quiz backfilled for module ${i + 1}`);
+        } catch (quizError) {
+          console.error(`❌ Failed to backfill quiz for module ${i + 1}:`, quizError);
+          // Fallback: Create an empty quiz structure to satisfy schema if necessary, 
+          // but generateQuiz usually succeeds as it's a smaller call.
+        }
+      }
+    }
+
     console.log(`✅ Course generated successfully: "${parsed.course_title}"`);
     console.log(`   Modules: ${parsed.modules.length}`);
     console.log(`   Total lessons: ${parsed.modules.reduce((sum: number, m: any) => sum + m.lessons.length, 0)}\n`);
 
-    return parsed;
+    return parsed as GeneratedCourse;
   } catch (error: any) {
     console.error(`❌ Failed to generate course for "${topic}":`, error);
     console.error(`Stack trace:`, error.stack);

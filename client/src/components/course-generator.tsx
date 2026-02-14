@@ -56,7 +56,7 @@ export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGen
         if (response.status === 403) {
           throw new Error("Permission denied. Please refresh or check your account permissions.");
         }
-        throw new Error("Failed to generate course. The AI might be taking longer than expected.");
+        throw new Error("Please try generating the course again.");
       }
 
       const generatedCourse = await response.json();

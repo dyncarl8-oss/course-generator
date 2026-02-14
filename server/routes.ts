@@ -1403,7 +1403,7 @@ export async function registerRoutes(
 
       const createdLessons: { moduleIndex: number; lessonIndex: number; lessonId: string }[] = [];
 
-      // Create all modules in parallel for faster response
+      // Create all modules and their quizzes
       const modulePromises = validated.data.modules.map(async (moduleData: any, i: number) => {
         const module = await storage.createModule({
           courseId: course.id,
@@ -1411,19 +1411,36 @@ export async function registerRoutes(
           orderIndex: i,
         });
 
-        for (let j = 0; j < moduleData.lessons.length; j++) {
-          const lessonData = moduleData.lessons[j];
-          const lesson = await storage.createLesson({
+        if (moduleData.quiz) {
+          await storage.createQuiz({
+            moduleId: module.id,
+            title: moduleData.quiz.title,
+            questions: moduleData.quiz.questions.map((q: any) => ({
+              id: randomUUID(),
+              ...q,
+            })),
+          });
+        }
+
+        return { module, moduleIndex: i, lessons: moduleData.lessons };
+      });
+
+      const createdModules = await Promise.all(modulePromises);
+
+      // Create all lessons in parallel for faster response
+      const lessonPromises = createdModules.flatMap(({ module, moduleIndex, lessons }) =>
+        (lessons as any[]).map((lessonData, j) =>
+          storage.createLesson({
             moduleId: module.id,
             title: lessonData.lesson_title,
             content: lessonData.content,
             orderIndex: j,
-          });
-          createdLessons.push({ moduleIndex: i, lessonIndex: j, lessonId: lesson.id });
-        }
-      });
+          }).then(lesson => ({ moduleIndex, lessonIndex: j, lessonId: lesson.id }))
+        )
+      );
 
-      await Promise.all(modulePromises);
+      const lessonResults = await Promise.all(lessonPromises);
+      createdLessons.push(...lessonResults);
 
       // Return the course immediately - images will be generated in the background
       const courseWithModules = await storage.getCourseWithModules(course.id);

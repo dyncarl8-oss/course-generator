@@ -178,101 +178,133 @@ export async function generateCourse(topic: string): Promise<GeneratedCourse> {
     ]
   } `;
 
-  try {
-    console.log(`\n📚 Generating course for topic: "${topic}"(with web search for latest ${currentYear} info)`);
-
-    const { response, model, groundingUsed } = await generateWithFallback({
-      prompt,
-      useGrounding: true,
-    });
-
-    console.log(`📖 Generated with: ${model}${groundingUsed ? ' (grounding enabled)' : ''} \n`);
-
-    const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
-    if (groundingMetadata) {
-      const webSearchQueries = groundingMetadata.webSearchQueries || [];
-      const groundingChunks = groundingMetadata.groundingChunks || [];
-
-      console.log(`🔎 Grounding successful!`);
-      console.log(`   Web search queries: ${webSearchQueries.length} `);
-      console.log(`   Sources found: ${groundingChunks.length} `);
-
-      if (webSearchQueries.length > 0) {
-        console.log(`\n🔍 Search queries executed: `);
-        webSearchQueries.forEach((query: string, index: number) => {
-          console.log(`  ${index + 1}. ${query} `);
-        });
+  async function generateCourseOutline(topic: string, currentYear: number, currentMonth: string) {
+    const prompt = `You are an expert course designer. Create a detailed outline for a course on: "${topic}".
+  Focus on the most current ${currentYear} industry standards.
+  
+  JSON SCHEMA:
+  {
+    "course_title": "string",
+    "description": "string (3-4 sentences)",
+    "modules": [
+      {
+        "module_title": "string",
+        "lesson_titles": ["string", "string", "string"]
       }
-
-      if (groundingChunks.length > 0) {
-        console.log(`\n📖 Top sources used: `);
-        groundingChunks.slice(0, 5).forEach((chunk: any, index: number) => {
-          const title = chunk.web?.title || 'Unknown source';
-          console.log(`  ${index + 1}. ${title} `);
-        });
-        if (groundingChunks.length > 5) {
-          console.log(`  ... and ${groundingChunks.length - 5} more sources`);
-        }
-      }
-    } else {
-      console.log(`⚠️  No grounding metadata returned - content based on model knowledge only`);
-    }
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response from Gemini");
-    }
-
-    console.log(`\n📝 Raw response(length: ${text?.length || 0}): ${text?.substring(0, 300)} `);
-
-    let jsonText = text.trim();
-    if (jsonText.startsWith("```json")) {
-      jsonText = jsonText.slice(7);
-    }
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText.slice(3);
-    }
-    if (jsonText.endsWith("```")) {
-      jsonText = jsonText.slice(0, -3);
-    }
-    jsonText = jsonText.trim();
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonText) as GeneratedCourse;
-    } catch (parseError: any) {
-      console.log(`⚠️  Initial JSON parse failed, attempting repair...`);
-      try {
-        const repairedJSON = repairJSON(jsonText);
-        parsed = JSON.parse(repairedJSON) as GeneratedCourse;
-        console.log(`✅ JSON successfully repaired and parsed`);
-      } catch (repairError: any) {
-        console.error(`❌ JSON parse error: ${repairError.message}`);
-        throw repairError;
-      }
-    }
-
-    if (!parsed.course_title || !Array.isArray(parsed.modules)) {
-      throw new Error("Invalid course structure");
-    }
-
-    console.log(`✅ Course generated successfully: "${parsed.course_title}"`);
-    console.log(`   Modules: ${parsed.modules.length}`);
-    console.log(`   Total lessons: ${parsed.modules.reduce((sum: number, m: any) => sum + m.lessons.length, 0)}\n`);
-
-    return parsed;
-  } catch (error: any) {
-    console.error(`❌ Failed to generate course for "${topic}":`, error);
-    console.error(`Stack trace:`, error.stack);
-    throw new Error("Failed to generate course content. Please try again.");
+    ]
   }
-}
+  
+  REQUIREMENTS:
+  - 6-10 modules.
+  - 3-5 lessons per module.
+  - Return ONLY valid JSON.`;
 
-export async function generateQuiz(
-  moduleTitle: string,
-  lessonsContext: string
-): Promise<{ title: string; questions: any[] }> {
-  const prompt = `You are an expert educator. Create a 3-5 question multiple-choice quiz for a course module.
+    console.log(`\n🏗️ Phase 1: Generating course outline...`);
+    const { response } = await generateWithFallback({ prompt, useGrounding: true });
+
+    let jsonText = response.text.trim();
+    if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
+    if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
+    if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
+
+    return JSON.parse(jsonText.trim());
+  }
+
+  async function generateModuleContent(
+    courseTitle: string,
+    moduleTitle: string,
+    lessonTitles: string[],
+    currentYear: number
+  ) {
+    const prompt = `You are an expert instructor. Generate detailed content for a module in the course "${courseTitle}".
+  
+  Module: "${moduleTitle}"
+  Lessons to cover: ${lessonTitles.join(", ")}
+  
+  REQUIREMENTS:
+  - For each lesson listed above, provide 5-8 paragraphs of deep educational content.
+  - Use professional examples and current ${currentYear} best practices.
+  - At the end, include a quiz with 3-5 multiple choice questions.
+  - Return ONLY valid JSON.
+  
+  JSON SCHEMA:
+  {
+    "module_title": "string",
+    "lessons": [
+      {
+        "lesson_title": "string",
+        "content": "string (detailed 5-8 paragraphs)"
+      }
+    ],
+    "quiz": {
+      "title": "Module Review Quiz",
+      "questions": [
+        {
+          "question": "string",
+          "options": ["opt1", "opt2", "opt3", "opt4"],
+          "correctAnswer": 0,
+          "explanation": "string"
+        }
+      ]
+    }
+  }`;
+
+    console.log(`\n📝 Phase 2: Generating content for module: "${moduleTitle}"...`);
+    const { response } = await generateWithFallback({ prompt, useGrounding: false });
+
+    let jsonText = response.text.trim();
+    if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
+    if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
+    if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
+
+    return JSON.parse(jsonText.trim());
+  }
+
+  export async function generateCourse(topic: string): Promise<GeneratedCourse> {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
+
+    try {
+      // 1. Generate Skeleton
+      const outline = await generateCourseOutline(topic, currentYear, currentMonth);
+
+      // 2. Generate Content for each module in parallel (bash processed)
+      console.log(`\n📚 Outline generated. Creating content for ${outline.modules.length} modules...`);
+
+      const modules: any[] = [];
+      // Process modules in batches of 2 to avoid overloading but keep it relatively fast
+      for (let i = 0; i < outline.modules.length; i += 2) {
+        const batch = outline.modules.slice(i, i + 2);
+        const batchResults = await Promise.all(
+          batch.map((m: any) => generateModuleContent(
+            outline.course_title,
+            m.module_title,
+            m.lesson_titles,
+            currentYear
+          ))
+        );
+        modules.push(...batchResults);
+      }
+
+      const finalCourse: GeneratedCourse = {
+        course_title: outline.course_title,
+        description: outline.description,
+        modules: modules
+      };
+
+      console.log(`✅ Multi-phase generation complete: "${finalCourse.course_title}"`);
+      return finalCourse;
+    } catch (error: any) {
+      console.error(`❌ Multi-phase generation failed:`, error);
+      throw new Error("Failed to generate complete course content. This can happen with very complex topics. Please try again.");
+    }
+  }
+
+  export async function generateQuiz(
+    moduleTitle: string,
+    lessonsContext: string
+  ): Promise<{ title: string; questions: any[] }> {
+    const prompt = `You are an expert educator. Create a 3-5 question multiple-choice quiz for a course module.
   
   Module Title: "${moduleTitle}"
   Content Summary: ${lessonsContext}
@@ -297,48 +329,48 @@ export async function generateQuiz(
     ]
   }`;
 
-  try {
-    console.log(`\n🧠 Generating quiz for module: "${moduleTitle}"`);
+    try {
+      console.log(`\n🧠 Generating quiz for module: "${moduleTitle}"`);
 
-    const { response, model } = await generateWithFallback({
-      prompt,
-      useGrounding: false
-    });
+      const { response, model } = await generateWithFallback({
+        prompt,
+        useGrounding: false
+      });
 
-    const text = response.text;
-    if (!text) throw new Error("Empty response for quiz");
+      const text = response.text;
+      if (!text) throw new Error("Empty response for quiz");
 
-    let jsonText = text.trim();
-    if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
-    if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
-    if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
+      let jsonText = text.trim();
+      if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
+      if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
+      if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
 
-    return JSON.parse(jsonText.trim());
-  } catch (error) {
-    console.error("Failed to generate quiz:", error);
-    throw error;
+      return JSON.parse(jsonText.trim());
+    } catch (error) {
+      console.error("Failed to generate quiz:", error);
+      throw error;
+    }
   }
-}
 
-export async function regenerateModule(
-  moduleTopic: string,
-  courseContext: string
-): Promise<{
-  module_title: string;
-  lessons: { lesson_title: string; content: string }[];
-  quiz?: {
-    title: string;
-    questions: {
-      question: string;
-      options: string[];
-      correctAnswer: number;
-      explanation: string;
-    }[];
-  };
-}> {
-  const currentYear = new Date().getFullYear();
+  export async function regenerateModule(
+    moduleTopic: string,
+    courseContext: string
+  ): Promise<{
+    module_title: string;
+    lessons: { lesson_title: string; content: string }[];
+    quiz?: {
+      title: string;
+      questions: {
+        question: string;
+        options: string[];
+        correctAnswer: number;
+        explanation: string;
+      }[];
+    };
+  }> {
+    const currentYear = new Date().getFullYear();
 
-  const prompt = `You are an expert course designer with access to the internet. Regenerate a module for a course.
+    const prompt = `You are an expert course designer with access to the internet. Regenerate a module for a course.
 
 Course context: ${courseContext}
 Module topic: ${moduleTopic}
@@ -384,49 +416,49 @@ IMPORTANT: Keep the response high-value but concise to stay within the 8192 toke
   }
 } `;
 
-  try {
-    console.log(`\n📚 Regenerating module: "${moduleTopic}" (with web search)`);
+    try {
+      console.log(`\n📚 Regenerating module: "${moduleTopic}" (with web search)`);
 
-    const { response, model, groundingUsed } = await generateWithFallback({
-      prompt,
-      useGrounding: true,
-    });
+      const { response, model, groundingUsed } = await generateWithFallback({
+        prompt,
+        useGrounding: true,
+      });
 
-    console.log(`📖 Generated with: ${model}${groundingUsed ? ' (grounding enabled)' : ''}\n`);
+      console.log(`📖 Generated with: ${model}${groundingUsed ? ' (grounding enabled)' : ''}\n`);
 
-    const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
-    if (groundingMetadata) {
-      const webSearchQueries = groundingMetadata.webSearchQueries || [];
-      const groundingChunks = groundingMetadata.groundingChunks || [];
-      console.log(`🔎 Grounding: ${webSearchQueries.length} searches, ${groundingChunks.length} sources`);
+      const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
+      if (groundingMetadata) {
+        const webSearchQueries = groundingMetadata.webSearchQueries || [];
+        const groundingChunks = groundingMetadata.groundingChunks || [];
+        console.log(`🔎 Grounding: ${webSearchQueries.length} searches, ${groundingChunks.length} sources`);
+      }
+
+      const text = response.text;
+      if (!text) {
+        throw new Error("Empty response from Gemini");
+      }
+
+      let jsonText = text.trim();
+      if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
+      if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
+      if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
+
+      const result = JSON.parse(jsonText.trim());
+      console.log(`✅ Module regenerated: "${result.module_title}" (${result.lessons.length} lessons)\n`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Failed to regenerate module for "${moduleTopic}":`, error);
+      throw error;
     }
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response from Gemini");
-    }
-
-    let jsonText = text.trim();
-    if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
-    if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
-    if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
-
-    const result = JSON.parse(jsonText.trim());
-    console.log(`✅ Module regenerated: "${result.module_title}" (${result.lessons.length} lessons)\n`);
-    return result;
-  } catch (error) {
-    console.error(`❌ Failed to regenerate module for "${moduleTopic}":`, error);
-    throw error;
   }
-}
 
-export async function regenerateLesson(
-  lessonTopic: string,
-  moduleContext: string
-): Promise<{ lesson_title: string; content: string }> {
-  const currentYear = new Date().getFullYear();
+  export async function regenerateLesson(
+    lessonTopic: string,
+    moduleContext: string
+  ): Promise<{ lesson_title: string; content: string }> {
+    const currentYear = new Date().getFullYear();
 
-  const prompt = `You are an expert course designer with access to the internet. Regenerate a lesson.
+    const prompt = `You are an expert course designer with access to the internet. Regenerate a lesson.
 
 Module context: ${moduleContext}
 Lesson topic: ${lessonTopic}
@@ -455,45 +487,45 @@ IMPORTANT: Keep the response high-value but concise to stay within the 8192 toke
   "content": "Full lesson content with multiple paragraphs..."
 }`;
 
-  try {
-    console.log(`\n📝 Regenerating lesson: "${lessonTopic}" (with web search)`);
+    try {
+      console.log(`\n📝 Regenerating lesson: "${lessonTopic}" (with web search)`);
 
-    const { response, model, groundingUsed } = await generateWithFallback({
-      prompt,
-      useGrounding: true,
-    });
+      const { response, model, groundingUsed } = await generateWithFallback({
+        prompt,
+        useGrounding: true,
+      });
 
-    console.log(`📖 Generated with: ${model}${groundingUsed ? ' (grounding enabled)' : ''}\n`);
+      console.log(`📖 Generated with: ${model}${groundingUsed ? ' (grounding enabled)' : ''}\n`);
 
-    const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
-    if (groundingMetadata) {
-      const webSearchQueries = groundingMetadata.webSearchQueries || [];
-      const groundingChunks = groundingMetadata.groundingChunks || [];
-      console.log(`🔎 Grounding: ${webSearchQueries.length} searches, ${groundingChunks.length} sources`);
+      const groundingMetadata = (response.candidates?.[0] as any)?.groundingMetadata;
+      if (groundingMetadata) {
+        const webSearchQueries = groundingMetadata.webSearchQueries || [];
+        const groundingChunks = groundingMetadata.groundingChunks || [];
+        console.log(`🔎 Grounding: ${webSearchQueries.length} searches, ${groundingChunks.length} sources`);
+      }
+
+      const text = response.text;
+      if (!text) {
+        throw new Error("Empty response from Gemini");
+      }
+
+      let jsonText = text.trim();
+      if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
+      if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
+      if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
+
+      const result = JSON.parse(jsonText.trim());
+      console.log(`✅ Lesson regenerated: "${result.lesson_title}"\n`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Failed to regenerate lesson for "${lessonTopic}":`, error);
+      throw error;
     }
-
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response from Gemini");
-    }
-
-    let jsonText = text.trim();
-    if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
-    if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
-    if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
-
-    const result = JSON.parse(jsonText.trim());
-    console.log(`✅ Lesson regenerated: "${result.lesson_title}"\n`);
-    return result;
-  } catch (error) {
-    console.error(`❌ Failed to regenerate lesson for "${lessonTopic}":`, error);
-    throw error;
   }
-}
 
-export async function generateImagePrompt(courseTitle: string): Promise<string> {
-  try {
-    const prompt = `You are an expert course thumbnail designer for platforms like Udemy and Skillshare. Create a professional thumbnail prompt.
+  export async function generateImagePrompt(courseTitle: string): Promise<string> {
+    try {
+      const prompt = `You are an expert course thumbnail designer for platforms like Udemy and Skillshare. Create a professional thumbnail prompt.
 
 Course title: "${courseTitle}"
 
@@ -517,241 +549,241 @@ Examples:
 
 Respond with ONLY the prompt, nothing else.`;
 
-    const { response, model: usedModel } = await generateWithFallback({
-      prompt,
-    });
-
-    console.log(`📖 Generated with: ${usedModel}`);
-
-    const text = response.text?.trim();
-    if (!text) {
-      return `a course thumbnail with text "${courseTitle}"`;
-    }
-
-    return text;
-  } catch (error) {
-    console.error("Failed to generate image prompt:", error);
-    return `a course thumbnail with text "${courseTitle}"`;
-  }
-}
-
-const DEAPI_BASE_URL = "https://api.deapi.ai";
-
-async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-export async function generateCourseImageWithDeAPI(prompt: string): Promise<string | null> {
-  const apiKey = process.env.DEAPI_API_KEY;
-
-  if (!apiKey) {
-    console.error("DEAPI_API_KEY is not set");
-    return null;
-  }
-
-  try {
-    console.log("DeAPI: Starting image generation with prompt:", prompt);
-
-    const generateResponse = await fetch(`${DEAPI_BASE_URL}/api/v1/client/txt2img`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        prompt: prompt,
-        negative_prompt: "blur, darkness, noise, low quality, distorted text, cluttered, messy, too many elements, pixelated, blurry text, illegible text, watermark, amateur, ugly, deformed, bad anatomy, extra limbs, disfigured face, cropped, multiple people, cartoon, anime, illustration, painting, sketch, low resolution",
-        model: "ZImageTurbo_INT8",
-        loras: [],
-        width: 768,
-        height: 432,
-        guidance: 7.5,
-        steps: 20,
-        seed: Math.floor(Math.random() * 1000000)
-      })
-    });
-
-    if (!generateResponse.ok) {
-      const errorText = await generateResponse.text().catch(() => "Unknown error");
-      console.error("DeAPI generate error:", generateResponse.status, errorText);
-      return null;
-    }
-
-    const generateData = await generateResponse.json();
-    const requestId = generateData?.data?.request_id || generateData?.task_id || generateData?.request_id;
-
-    if (!requestId) {
-      console.error("DeAPI: No request_id in response:", generateData);
-      return null;
-    }
-
-    const maxAttempts = 50;
-    const pollInterval = 5000;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      await sleep(pollInterval);
-
-      const statusResponse = await fetch(`${DEAPI_BASE_URL}/api/v1/client/request-status/${requestId}`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Accept": "application/json"
-        }
+      const { response, model: usedModel } = await generateWithFallback({
+        prompt,
       });
 
-      if (statusResponse.status === 429) {
-        console.log(`DeAPI: Rate limited (429), attempt ${attempt + 1}. Backing off for 10s...`);
-        await sleep(10000);
-        continue;
+      console.log(`📖 Generated with: ${usedModel}`);
+
+      const text = response.text?.trim();
+      if (!text) {
+        return `a course thumbnail with text "${courseTitle}"`;
       }
 
-      if (!statusResponse.ok) {
-        const errorText = await statusResponse.text().catch(() => "Unknown error");
-        console.error(`DeAPI: Status check failed with status ${statusResponse.status}, attempt ${attempt + 1}:`, errorText);
-        // On server error, wait longer
-        await sleep(2000);
-        continue;
-      }
+      return text;
+    } catch (error) {
+      console.error("Failed to generate image prompt:", error);
+      return `a course thumbnail with text "${courseTitle}"`;
+    }
+  }
 
-      const statusData = await statusResponse.json();
-      const status = statusData?.data?.status || statusData?.status || statusData?.data?.request_status;
-      console.log("DeAPI: Status:", status);
+  const DEAPI_BASE_URL = "https://api.deapi.ai";
 
-      if (status === "done" || status === "COMPLETED") {
-        const imageUrl = statusData?.data?.result_url ||
-          statusData?.result_url ||
-          statusData?.result?.output_url;
+  async function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
-        if (imageUrl) {
-          console.log("DeAPI: Image generated successfully:", imageUrl);
+  export async function generateCourseImageWithDeAPI(prompt: string): Promise<string | null> {
+    const apiKey = process.env.DEAPI_API_KEY;
 
-          // Download the image and convert to base64 data URL to avoid expiration
-          try {
-            const imageResponse = await fetch(imageUrl);
-            if (imageResponse.ok) {
-              const arrayBuffer = await imageResponse.arrayBuffer();
-              const base64 = Buffer.from(arrayBuffer).toString('base64');
-              const contentType = imageResponse.headers.get('content-type') || 'image/png';
-              const dataUrl = `data:${contentType};base64,${base64}`;
-              console.log("DeAPI: Image converted to permanent data URL");
-              return dataUrl;
-            } else {
-              console.error("DeAPI: Failed to download image, returning original URL");
-              return imageUrl;
-            }
-          } catch (downloadError) {
-            console.error("DeAPI: Error downloading image:", downloadError);
-            return imageUrl;
-          }
-        } else {
-          console.log("DeAPI: Completed but no image URL found:", JSON.stringify(statusData));
-          return null;
-        }
-      } else if (status === "FAILED" || status === "failed" || status === "error") {
-        console.error("DeAPI: Generation failed:", statusData?.error || statusData);
-        return null;
-      } else {
-        console.log("DeAPI: Still processing, attempt", attempt + 1, "status:", status);
-      }
+    if (!apiKey) {
+      console.error("DEAPI_API_KEY is not set");
+      return null;
     }
 
-    console.error("DeAPI: Timeout waiting for image generation");
-    return null;
-  } catch (error) {
-    console.error("DeAPI request failed:", error);
-    return null;
-  }
-}
+    try {
+      console.log("DeAPI: Starting image generation with prompt:", prompt);
 
-export async function generateCourseImage(courseTitle: string): Promise<string | null> {
-  try {
-    const prompt = await generateImagePrompt(courseTitle);
-    console.log("Generating image with prompt:", prompt);
+      const generateResponse = await fetch(`${DEAPI_BASE_URL}/api/v1/client/txt2img`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          negative_prompt: "blur, darkness, noise, low quality, distorted text, cluttered, messy, too many elements, pixelated, blurry text, illegible text, watermark, amateur, ugly, deformed, bad anatomy, extra limbs, disfigured face, cropped, multiple people, cartoon, anime, illustration, painting, sketch, low resolution",
+          model: "ZImageTurbo_INT8",
+          loras: [],
+          width: 768,
+          height: 432,
+          guidance: 7.5,
+          steps: 20,
+          seed: Math.floor(Math.random() * 1000000)
+        })
+      });
 
-    const imageUrl = await generateCourseImageWithDeAPI(prompt);
-    return imageUrl;
-  } catch (error) {
-    console.error("Failed to generate course image:", error);
-    return null;
-  }
-}
-
-export interface ImagePlan {
-  imagePrompt: string;
-  imageAlt: string;
-  placement: number;
-}
-
-export interface LessonMediaPlan {
-  lessonIndex: number;
-  images: ImagePlan[];
-}
-
-export interface ModuleMediaPlan {
-  moduleIndex: number;
-  lessons: LessonMediaPlan[];
-}
-
-// Generate a fallback image prompt for a lesson
-function generateFallbackImagePrompt(courseTitle: string, moduleTitle: string, lessonTitle: string, lessonContent: string): string {
-  const contentPreview = lessonContent.substring(0, 150).replace(/[#*_\n]/g, ' ').trim();
-  return `Professional educational illustration for "${lessonTitle}" in a course about "${courseTitle}". Visual concept: ${contentPreview}. Style: clean, modern, minimalist illustration with soft colors. NO TEXT, NO WORDS, NO LABELS, NO CAPTIONS in the image - purely visual elements only. Focus on icons, objects, people, or abstract shapes to represent the concept.`;
-}
-
-// Generate a fallback media plan - conservative approach, only add images where truly needed
-function generateFallbackMediaPlan(
-  courseTitle: string,
-  modules: { module_title: string; lessons: { lesson_title: string; content: string }[] }[]
-): ModuleMediaPlan[] {
-  console.log("Generating conservative fallback media plan for", modules.length, "modules");
-
-  // Calculate total lessons to determine how many images to add (roughly 1 per module)
-  const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
-  const targetImages = Math.min(modules.length, Math.ceil(totalLessons / 5)); // ~1 image per 5 lessons
-
-  let imagesAdded = 0;
-
-  return modules.map((module, moduleIndex) => ({
-    moduleIndex,
-    lessons: module.lessons.map((lesson, lessonIndex) => {
-      const images: ImagePlan[] = [];
-
-      // Only add image to first lesson of each module, and only if we haven't exceeded target
-      if (lessonIndex === 0 && imagesAdded < targetImages) {
-        // Calculate paragraph count to place image after the last paragraph
-        const paragraphCount = lesson.content.split(/\n\s*\n/).filter(p => p.trim()).length;
-        images.push({
-          imagePrompt: generateFallbackImagePrompt(courseTitle, module.module_title, lesson.lesson_title, lesson.content),
-          imageAlt: `Illustration for ${lesson.lesson_title}`,
-          placement: Math.max(1, paragraphCount), // Place after content, minimum after first paragraph
-        });
-        imagesAdded++;
+      if (!generateResponse.ok) {
+        const errorText = await generateResponse.text().catch(() => "Unknown error");
+        console.error("DeAPI generate error:", generateResponse.status, errorText);
+        return null;
       }
 
-      return { lessonIndex, images };
-    }),
-  }));
-}
+      const generateData = await generateResponse.json();
+      const requestId = generateData?.data?.request_id || generateData?.task_id || generateData?.request_id;
 
-export async function generateCourseMediaPlan(
-  courseTitle: string,
-  modules: { module_title: string; lessons: { lesson_title: string; content: string }[] }[]
-): Promise<ModuleMediaPlan[]> {
-  // Count paragraphs for each lesson to help AI decide placement
-  const modulesWithParagraphCounts = modules.map((m, mi) => ({
-    ...m,
-    lessons: m.lessons.map((l, li) => ({
-      ...l,
-      paragraphCount: l.content.split(/\n\s*\n/).filter(p => p.trim()).length
-    }))
-  }));
+      if (!requestId) {
+        console.error("DeAPI: No request_id in response:", generateData);
+        return null;
+      }
 
-  // Calculate target: roughly 1-2 images per module maximum
-  const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
-  const targetImageCount = Math.max(2, Math.min(modules.length, Math.ceil(totalLessons / 6)));
+      const maxAttempts = 50;
+      const pollInterval = 5000;
 
-  const prompt = `You are an expert course designer. Analyze this course and decide which lessons TRULY NEED an image to enhance understanding.
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await sleep(pollInterval);
+
+        const statusResponse = await fetch(`${DEAPI_BASE_URL}/api/v1/client/request-status/${requestId}`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Accept": "application/json"
+          }
+        });
+
+        if (statusResponse.status === 429) {
+          console.log(`DeAPI: Rate limited (429), attempt ${attempt + 1}. Backing off for 10s...`);
+          await sleep(10000);
+          continue;
+        }
+
+        if (!statusResponse.ok) {
+          const errorText = await statusResponse.text().catch(() => "Unknown error");
+          console.error(`DeAPI: Status check failed with status ${statusResponse.status}, attempt ${attempt + 1}:`, errorText);
+          // On server error, wait longer
+          await sleep(2000);
+          continue;
+        }
+
+        const statusData = await statusResponse.json();
+        const status = statusData?.data?.status || statusData?.status || statusData?.data?.request_status;
+        console.log("DeAPI: Status:", status);
+
+        if (status === "done" || status === "COMPLETED") {
+          const imageUrl = statusData?.data?.result_url ||
+            statusData?.result_url ||
+            statusData?.result?.output_url;
+
+          if (imageUrl) {
+            console.log("DeAPI: Image generated successfully:", imageUrl);
+
+            // Download the image and convert to base64 data URL to avoid expiration
+            try {
+              const imageResponse = await fetch(imageUrl);
+              if (imageResponse.ok) {
+                const arrayBuffer = await imageResponse.arrayBuffer();
+                const base64 = Buffer.from(arrayBuffer).toString('base64');
+                const contentType = imageResponse.headers.get('content-type') || 'image/png';
+                const dataUrl = `data:${contentType};base64,${base64}`;
+                console.log("DeAPI: Image converted to permanent data URL");
+                return dataUrl;
+              } else {
+                console.error("DeAPI: Failed to download image, returning original URL");
+                return imageUrl;
+              }
+            } catch (downloadError) {
+              console.error("DeAPI: Error downloading image:", downloadError);
+              return imageUrl;
+            }
+          } else {
+            console.log("DeAPI: Completed but no image URL found:", JSON.stringify(statusData));
+            return null;
+          }
+        } else if (status === "FAILED" || status === "failed" || status === "error") {
+          console.error("DeAPI: Generation failed:", statusData?.error || statusData);
+          return null;
+        } else {
+          console.log("DeAPI: Still processing, attempt", attempt + 1, "status:", status);
+        }
+      }
+
+      console.error("DeAPI: Timeout waiting for image generation");
+      return null;
+    } catch (error) {
+      console.error("DeAPI request failed:", error);
+      return null;
+    }
+  }
+
+  export async function generateCourseImage(courseTitle: string): Promise<string | null> {
+    try {
+      const prompt = await generateImagePrompt(courseTitle);
+      console.log("Generating image with prompt:", prompt);
+
+      const imageUrl = await generateCourseImageWithDeAPI(prompt);
+      return imageUrl;
+    } catch (error) {
+      console.error("Failed to generate course image:", error);
+      return null;
+    }
+  }
+
+  export interface ImagePlan {
+    imagePrompt: string;
+    imageAlt: string;
+    placement: number;
+  }
+
+  export interface LessonMediaPlan {
+    lessonIndex: number;
+    images: ImagePlan[];
+  }
+
+  export interface ModuleMediaPlan {
+    moduleIndex: number;
+    lessons: LessonMediaPlan[];
+  }
+
+  // Generate a fallback image prompt for a lesson
+  function generateFallbackImagePrompt(courseTitle: string, moduleTitle: string, lessonTitle: string, lessonContent: string): string {
+    const contentPreview = lessonContent.substring(0, 150).replace(/[#*_\n]/g, ' ').trim();
+    return `Professional educational illustration for "${lessonTitle}" in a course about "${courseTitle}". Visual concept: ${contentPreview}. Style: clean, modern, minimalist illustration with soft colors. NO TEXT, NO WORDS, NO LABELS, NO CAPTIONS in the image - purely visual elements only. Focus on icons, objects, people, or abstract shapes to represent the concept.`;
+  }
+
+  // Generate a fallback media plan - conservative approach, only add images where truly needed
+  function generateFallbackMediaPlan(
+    courseTitle: string,
+    modules: { module_title: string; lessons: { lesson_title: string; content: string }[] }[]
+  ): ModuleMediaPlan[] {
+    console.log("Generating conservative fallback media plan for", modules.length, "modules");
+
+    // Calculate total lessons to determine how many images to add (roughly 1 per module)
+    const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
+    const targetImages = Math.min(modules.length, Math.ceil(totalLessons / 5)); // ~1 image per 5 lessons
+
+    let imagesAdded = 0;
+
+    return modules.map((module, moduleIndex) => ({
+      moduleIndex,
+      lessons: module.lessons.map((lesson, lessonIndex) => {
+        const images: ImagePlan[] = [];
+
+        // Only add image to first lesson of each module, and only if we haven't exceeded target
+        if (lessonIndex === 0 && imagesAdded < targetImages) {
+          // Calculate paragraph count to place image after the last paragraph
+          const paragraphCount = lesson.content.split(/\n\s*\n/).filter(p => p.trim()).length;
+          images.push({
+            imagePrompt: generateFallbackImagePrompt(courseTitle, module.module_title, lesson.lesson_title, lesson.content),
+            imageAlt: `Illustration for ${lesson.lesson_title}`,
+            placement: Math.max(1, paragraphCount), // Place after content, minimum after first paragraph
+          });
+          imagesAdded++;
+        }
+
+        return { lessonIndex, images };
+      }),
+    }));
+  }
+
+  export async function generateCourseMediaPlan(
+    courseTitle: string,
+    modules: { module_title: string; lessons: { lesson_title: string; content: string }[] }[]
+  ): Promise<ModuleMediaPlan[]> {
+    // Count paragraphs for each lesson to help AI decide placement
+    const modulesWithParagraphCounts = modules.map((m, mi) => ({
+      ...m,
+      lessons: m.lessons.map((l, li) => ({
+        ...l,
+        paragraphCount: l.content.split(/\n\s*\n/).filter(p => p.trim()).length
+      }))
+    }));
+
+    // Calculate target: roughly 1-2 images per module maximum
+    const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
+    const targetImageCount = Math.max(2, Math.min(modules.length, Math.ceil(totalLessons / 6)));
+
+    const prompt = `You are an expert course designer. Analyze this course and decide which lessons TRULY NEED an image to enhance understanding.
 
 Course: "${courseTitle}"
 
@@ -812,119 +844,119 @@ Respond ONLY with valid JSON:
   ]
 }`;
 
-  try {
-    const { response, model: usedModel } = await generateWithFallback({
-      prompt,
-    });
-
-    console.log(`📖 Media plan generated with: ${usedModel}`);
-
-    const text = response.text;
-    if (!text) {
-      console.error("Empty response from Gemini for media plan, using fallback");
-      return generateFallbackMediaPlan(courseTitle, modules);
-    }
-
-    let jsonText = text.trim();
-    if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
-    if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
-    if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
-    jsonText = jsonText.trim();
-
-    interface OldLessonFormat {
-      lessonIndex: number;
-      shouldAddImage?: boolean;
-      imagePrompt?: string;
-      imageAlt?: string;
-      placement?: number;
-      images?: ImagePlan[];
-    }
-
-    interface ParsedModulePlan {
-      moduleIndex: number;
-      lessons: OldLessonFormat[];
-    }
-
-    const parsed = JSON.parse(jsonText) as { modules: ParsedModulePlan[] };
-    const mediaPlan = parsed.modules || [];
-
-    // Convert to new format and validate
-    const validatedPlan: ModuleMediaPlan[] = modules.map((module, moduleIndex) => {
-      const existingModulePlan = mediaPlan.find(p => p.moduleIndex === moduleIndex);
-
-      if (!existingModulePlan) {
-        // Module missing from plan, create fallback
-        const fallback = generateFallbackMediaPlan(courseTitle, [module]);
-        return { moduleIndex, lessons: fallback[0]?.lessons || [] };
-      }
-
-      // Convert lessons to new format
-      const convertedLessons: LessonMediaPlan[] = module.lessons.map((lesson, lessonIndex) => {
-        const lessonPlan = existingModulePlan.lessons.find(l => l.lessonIndex === lessonIndex);
-
-        if (!lessonPlan) {
-          return { lessonIndex, images: [] };
-        }
-
-        // Handle both old format (shouldAddImage/imagePrompt) and new format (images array)
-        if (lessonPlan.images && Array.isArray(lessonPlan.images)) {
-          return { lessonIndex, images: lessonPlan.images };
-        } else if (lessonPlan.shouldAddImage && lessonPlan.imagePrompt) {
-          // Calculate paragraph count to determine proper placement
-          const paragraphCount = lesson.content.split(/\n\s*\n/).filter(p => p.trim()).length;
-          return {
-            lessonIndex,
-            images: [{
-              imagePrompt: lessonPlan.imagePrompt,
-              imageAlt: lessonPlan.imageAlt || `Illustration for ${lesson.lesson_title}`,
-              placement: lessonPlan.placement || Math.max(1, paragraphCount), // Default to after content
-            }]
-          };
-        }
-
-        return { lessonIndex, images: [] };
+    try {
+      const { response, model: usedModel } = await generateWithFallback({
+        prompt,
       });
 
-      return { moduleIndex, lessons: convertedLessons };
-    });
+      console.log(`📖 Media plan generated with: ${usedModel}`);
 
-    // Only add a single fallback image if the ENTIRE course has zero images
-    const totalImages = validatedPlan.reduce((sum, m) =>
-      sum + m.lessons.reduce((lSum, l) => lSum + l.images.length, 0), 0);
+      const text = response.text;
+      if (!text) {
+        console.error("Empty response from Gemini for media plan, using fallback");
+        return generateFallbackMediaPlan(courseTitle, modules);
+      }
 
-    if (totalImages === 0 && modules.length > 0 && modules[0].lessons.length > 0) {
-      // Add just one image to the first lesson of the first module
-      const firstLesson = modules[0].lessons[0];
-      const paragraphCount = firstLesson.content.split(/\n\s*\n/).filter(p => p.trim()).length;
-      validatedPlan[0].lessons[0] = {
-        lessonIndex: 0,
-        images: [{
-          imagePrompt: generateFallbackImagePrompt(courseTitle, modules[0].module_title, firstLesson.lesson_title, firstLesson.content),
-          imageAlt: `Illustration for ${firstLesson.lesson_title}`,
-          placement: Math.max(1, paragraphCount), // Place after content
-        }]
-      };
-      console.log("Added single fallback image as course had no images");
+      let jsonText = text.trim();
+      if (jsonText.startsWith("```json")) jsonText = jsonText.slice(7);
+      if (jsonText.startsWith("```")) jsonText = jsonText.slice(3);
+      if (jsonText.endsWith("```")) jsonText = jsonText.slice(0, -3);
+      jsonText = jsonText.trim();
+
+      interface OldLessonFormat {
+        lessonIndex: number;
+        shouldAddImage?: boolean;
+        imagePrompt?: string;
+        imageAlt?: string;
+        placement?: number;
+        images?: ImagePlan[];
+      }
+
+      interface ParsedModulePlan {
+        moduleIndex: number;
+        lessons: OldLessonFormat[];
+      }
+
+      const parsed = JSON.parse(jsonText) as { modules: ParsedModulePlan[] };
+      const mediaPlan = parsed.modules || [];
+
+      // Convert to new format and validate
+      const validatedPlan: ModuleMediaPlan[] = modules.map((module, moduleIndex) => {
+        const existingModulePlan = mediaPlan.find(p => p.moduleIndex === moduleIndex);
+
+        if (!existingModulePlan) {
+          // Module missing from plan, create fallback
+          const fallback = generateFallbackMediaPlan(courseTitle, [module]);
+          return { moduleIndex, lessons: fallback[0]?.lessons || [] };
+        }
+
+        // Convert lessons to new format
+        const convertedLessons: LessonMediaPlan[] = module.lessons.map((lesson, lessonIndex) => {
+          const lessonPlan = existingModulePlan.lessons.find(l => l.lessonIndex === lessonIndex);
+
+          if (!lessonPlan) {
+            return { lessonIndex, images: [] };
+          }
+
+          // Handle both old format (shouldAddImage/imagePrompt) and new format (images array)
+          if (lessonPlan.images && Array.isArray(lessonPlan.images)) {
+            return { lessonIndex, images: lessonPlan.images };
+          } else if (lessonPlan.shouldAddImage && lessonPlan.imagePrompt) {
+            // Calculate paragraph count to determine proper placement
+            const paragraphCount = lesson.content.split(/\n\s*\n/).filter(p => p.trim()).length;
+            return {
+              lessonIndex,
+              images: [{
+                imagePrompt: lessonPlan.imagePrompt,
+                imageAlt: lessonPlan.imageAlt || `Illustration for ${lesson.lesson_title}`,
+                placement: lessonPlan.placement || Math.max(1, paragraphCount), // Default to after content
+              }]
+            };
+          }
+
+          return { lessonIndex, images: [] };
+        });
+
+        return { moduleIndex, lessons: convertedLessons };
+      });
+
+      // Only add a single fallback image if the ENTIRE course has zero images
+      const totalImages = validatedPlan.reduce((sum, m) =>
+        sum + m.lessons.reduce((lSum, l) => lSum + l.images.length, 0), 0);
+
+      if (totalImages === 0 && modules.length > 0 && modules[0].lessons.length > 0) {
+        // Add just one image to the first lesson of the first module
+        const firstLesson = modules[0].lessons[0];
+        const paragraphCount = firstLesson.content.split(/\n\s*\n/).filter(p => p.trim()).length;
+        validatedPlan[0].lessons[0] = {
+          lessonIndex: 0,
+          images: [{
+            imagePrompt: generateFallbackImagePrompt(courseTitle, modules[0].module_title, firstLesson.lesson_title, firstLesson.content),
+            imageAlt: `Illustration for ${firstLesson.lesson_title}`,
+            placement: Math.max(1, paragraphCount), // Place after content
+          }]
+        };
+        console.log("Added single fallback image as course had no images");
+      }
+
+      console.log(`Validated media plan: ${totalImages} images across ${modules.length} modules`);
+      return validatedPlan;
+    } catch (error) {
+      console.error("Failed to generate media plan, using fallback:", error);
+      return generateFallbackMediaPlan(courseTitle, modules);
     }
-
-    console.log(`Validated media plan: ${totalImages} images across ${modules.length} modules`);
-    return validatedPlan;
-  } catch (error) {
-    console.error("Failed to generate media plan, using fallback:", error);
-    return generateFallbackMediaPlan(courseTitle, modules);
   }
-}
 
-export async function generateLessonImage(prompt: string): Promise<string | null> {
-  try {
-    console.log("Generating lesson image with prompt:", prompt);
-    const imageUrl = await generateCourseImageWithDeAPI(prompt);
-    return imageUrl;
-  } catch (error) {
-    console.error("Failed to generate lesson image:", error);
-    return null;
+  export async function generateLessonImage(prompt: string): Promise<string | null> {
+    try {
+      console.log("Generating lesson image with prompt:", prompt);
+      const imageUrl = await generateCourseImageWithDeAPI(prompt);
+      return imageUrl;
+    } catch (error) {
+      console.error("Failed to generate lesson image:", error);
+      return null;
+    }
   }
-}
 
 
 // End of file

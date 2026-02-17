@@ -578,7 +578,7 @@ export async function generateCourseImageWithDeAPI(prompt: string): Promise<stri
         width: 768,
         height: 432,
         guidance: 7.5,
-        steps: 20,
+        steps: 4,
         seed: Math.floor(Math.random() * 1000000)
       })
     });

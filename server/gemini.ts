@@ -139,9 +139,9 @@ export async function generateCourse(topic: string): Promise<GeneratedCourse> {
   - Practical, actionable advice.
 
   COURSE STRUCTURE:
-  - 4-8 modules for maximum curriculum depth.
+  - 3-5 modules for maximum curriculum depth.
   - 3-4 lessons per module.
-  - Each lesson: 5-7 paragraphs of DEPTH educational content. Be very detailed, use professional analogies, and provide real-world examples.
+  - Each lesson: 5-6 paragraphs of DEPTH educational content. Be very detailed, use professional analogies, and provide real-world examples.
   - At the end of EACH module, include a "quiz" with 3-5 high-quality multiple-choice questions.
 
   CRITICAL: You MUST respond ONLY with a single valid JSON object. No explanation or preamble.

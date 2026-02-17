@@ -572,7 +572,7 @@ export async function generateCourseImageWithDeAPI(prompt: string): Promise<stri
       },
       body: JSON.stringify({
         prompt: prompt,
-        negative_prompt: "blur, darkness, noise, low quality, distorted text, cluttered, messy, too many elements, pixelated, blurry text, illegible text, watermark, amateur, ugly, deformed, bad anatomy, extra limbs, disfigured face, cropped, multiple people, cartoon, anime, illustration, painting, sketch, low resolution",
+        negative_prompt: "blur, darkness, noise, low quality, distorted text, cluttered, messy, too many elements, pixelated, illegible text, watermark, amateur, ugly, deformed, bad anatomy, extra limbs, disfigured face, cropped, multiple people, cartoon, anime, illustration, painting, sketch, low resolution",
         model: "Flux_2_Klein_4B_BF16",
         loras: [],
         width: 768,
@@ -707,7 +707,7 @@ export interface ModuleMediaPlan {
 // Generate a fallback image prompt for a lesson
 function generateFallbackImagePrompt(courseTitle: string, moduleTitle: string, lessonTitle: string, lessonContent: string): string {
   const contentPreview = lessonContent.substring(0, 150).replace(/[#*_\n]/g, ' ').trim();
-  return `Professional educational illustration for "${lessonTitle}" in a course about "${courseTitle}". Visual concept: ${contentPreview}. Style: clean, modern, minimalist illustration with soft colors. NO TEXT, NO WORDS, NO LABELS, NO CAPTIONS in the image - purely visual elements only. Focus on icons, objects, people, or abstract shapes to represent the concept.`;
+  return `Professional educational illustration for "${lessonTitle}" in a course about "${courseTitle}". Visual concept: ${contentPreview}. Style: clean, modern, minimalist illustration with soft colors. The image can include relevant keywords or labels if they help explain the concept. Focus on icons, objects, people, or abstract shapes to represent the concept.`;
 }
 
 // Generate a fallback media plan - conservative approach, only add images where truly needed
@@ -785,7 +785,7 @@ CRITICAL RULES - BE VERY CONSERVATIVE WITH IMAGES:
    - Lists, tips, or best practices
    - Introduction or conclusion lessons
 5. Target: Add images to only ${targetImageCount} lessons TOTAL across the entire course
-6. Image prompts must be visual only - NO TEXT, NO WORDS, NO LABELS in prompts
+6. Image prompts should focus on visual concepts but can include relevant text, titles, or labels to enhance educational value.
 
 PLACEMENT RULES:
 - placement: 1 = image appears AFTER paragraph 1

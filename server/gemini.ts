@@ -573,7 +573,7 @@ export async function generateCourseImageWithDeAPI(prompt: string): Promise<stri
       body: JSON.stringify({
         prompt: prompt,
         negative_prompt: "blur, darkness, noise, low quality, distorted text, cluttered, messy, too many elements, pixelated, blurry text, illegible text, watermark, amateur, ugly, deformed, bad anatomy, extra limbs, disfigured face, cropped, multiple people, cartoon, anime, illustration, painting, sketch, low resolution",
-        model: "ZImageTurbo_INT8",
+        model: "Flux_2_Klein_4B_BF16",
         loras: [],
         width: 768,
         height: 432,

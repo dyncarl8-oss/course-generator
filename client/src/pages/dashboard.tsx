@@ -13,7 +13,7 @@ import { WithdrawRequestDialog } from "@/components/withdraw-request-dialog";
 import { UserMenu } from "@/components/user-menu";
 import {
   Plus, BookOpen, Users, TrendingUp,
-  Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet
+  Sparkles, LayoutGrid, DollarSign, HelpCircle, CheckCircle2, Wallet, AlertTriangle
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -277,7 +277,9 @@ export default function DashboardPage() {
             <Button
               onClick={() => setActiveTab("create")}
               data-testid="button-create-course"
-              className="h-9 px-3 sm:px-4 shrink-0"
+              className="h-9 px-3 sm:px-4 shrink-0 opacity-60 cursor-not-allowed"
+              disabled
+              title="Course creation is temporarily unavailable"
             >
               <Plus className="h-4 w-4 mr-1 sm:mr-2" />
               <span className="text-xs sm:text-sm font-medium">{isMobile ? "Create" : "Create Course"}</span>
@@ -335,7 +337,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground mb-5 max-w-sm">
                     Create your first AI-powered course to get started.
                   </p>
-                  <Button onClick={() => setActiveTab("create")} data-testid="button-create-first-course">
+                  <Button disabled className="opacity-60 cursor-not-allowed" data-testid="button-create-first-course">
                     <Sparkles className="h-4 w-4 mr-2" />
                     Create Course
                   </Button>
@@ -346,22 +348,20 @@ export default function DashboardPage() {
 
           <TabsContent value="create" className="mt-5" ref={createTabRef}>
             <div className="max-w-2xl mx-auto">
-              {!generatedCourse ? (
-                <CourseGenerator
-                  companyId={companyId || ""}
-                  onGenerated={setGeneratedCourse}
-                  isGenerating={isGenerating}
-                  setIsGenerating={setIsGenerating}
-                />
-              ) : (
-                <CoursePreview
-                  course={generatedCourse}
-                  onSave={handleSaveCourse}
-                  onDiscard={() => setGeneratedCourse(null)}
-                  isSaving={isGeneratingImage || saveMutation.isPending}
-                  savingStatus={savingStatus}
-                />
-              )}
+              <Card className="border-dashed border-amber-500/40">
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10">
+                    <AlertTriangle className="h-7 w-7 text-amber-500" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Course Generation Temporarily Unavailable</h3>
+                  <p className="text-sm text-muted-foreground max-w-md mb-1">
+                    We're currently working on improving the course generation experience.
+                  </p>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Please check back later — we'll have everything up and running soon!
+                  </p>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>

@@ -464,14 +464,14 @@ export default function ExperiencePage() {
                   />
                 )}
               */}
-              <Card className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                    <Sparkles className="h-6 w-6 text-primary" />
+              <Card className="border-dashed max-w-xl mx-auto">
+                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
+                    <AlertTriangle className="h-6 w-6 text-amber-500" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">Course Generation Updating</h3>
-                  <p className="text-sm text-muted-foreground max-w-sm">
-                    We're currently upgrading our AI models to provide you with even better course structures. Course generation will be back online shortly.
+                  <h3 className="text-lg font-semibold mb-2">Temporarily Unavailable</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                    Course generation is currently undergoing scheduled maintenance. We are working to bring this feature back online as quickly as possible.
                   </p>
                 </CardContent>
               </Card>

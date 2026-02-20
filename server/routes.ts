@@ -196,12 +196,27 @@ export async function registerRoutes(
       // For admin users (platform owners), use adminBalance
       // For creator users (course creators), use CreatorEarnings
       let earnings;
-      if (req.user.role === "admin" && req.user.adminBalance) {
-        earnings = {
-          totalEarnings: req.user.adminBalance.totalEarnings,
-          availableBalance: req.user.adminBalance.availableBalance,
-          pendingBalance: 0, // Admin balance doesn't have pending balance
+      let generationLimit = { limit: 1, used: 0, remaining: 1, resetAt: new Date().toISOString() };
+
+      if (req.user.role === "admin") {
+        const usedToday = await storage.getCoursesGeneratedToday(req.user.id);
+        const resetTime = new Date();
+        resetTime.setUTCHours(23, 59, 59, 999);
+
+        generationLimit = {
+          limit: 1,
+          used: usedToday,
+          remaining: Math.max(0, 1 - usedToday),
+          resetAt: resetTime.toISOString(),
         };
+
+        if (req.user.adminBalance) {
+          earnings = {
+            totalEarnings: req.user.adminBalance.totalEarnings,
+            availableBalance: req.user.adminBalance.availableBalance,
+            pendingBalance: 0, // Admin balance doesn't have pending balance
+          };
+        }
       } else {
         const creatorEarnings = await storage.getCreatorEarnings(req.user.id);
         earnings = creatorEarnings ? {
@@ -220,6 +235,7 @@ export async function registerRoutes(
         courses: coursesWithStats,
         companyId: req.params.companyId,
         earnings,
+        generationLimit,
       });
     } catch {
 
@@ -447,6 +463,19 @@ export async function registerRoutes(
     try {
       if (!req.user) {
         return res.status(401).json({ error: "User not found" });
+      }
+
+      if (req.user.role === "admin") {
+        const usedToday = await storage.getCoursesGeneratedToday(req.user.id);
+        if (usedToday >= 1) {
+          const resetTime = new Date();
+          resetTime.setUTCHours(23, 59, 59, 999);
+          return res.status(429).json({
+            error: "Daily course generation limit reached",
+            details: "Admins are limited to generating 1 course per day.",
+            resetAt: resetTime.toISOString()
+          });
+        }
       }
 
       const { generatedCourse, isFree, price, coverImage, generateLessonImages } = req.body;
@@ -1083,12 +1112,27 @@ export async function registerRoutes(
         // For admin users (platform owners), use adminBalance
         // For creator users (course creators), use CreatorEarnings
         let earnings;
-        if (req.user.role === "admin" && req.user.adminBalance) {
-          earnings = {
-            totalEarnings: req.user.adminBalance.totalEarnings,
-            availableBalance: req.user.adminBalance.availableBalance,
-            pendingBalance: 0, // Admin balance doesn't have pending balance
+        let generationLimit = { limit: 1, used: 0, remaining: 1, resetAt: new Date().toISOString() };
+
+        if (req.user.role === "admin") {
+          const usedToday = await storage.getCoursesGeneratedToday(userId);
+          const resetTime = new Date();
+          resetTime.setUTCHours(23, 59, 59, 999);
+
+          generationLimit = {
+            limit: 1,
+            used: usedToday,
+            remaining: Math.max(0, 1 - usedToday),
+            resetAt: resetTime.toISOString(),
           };
+
+          if (req.user.adminBalance) {
+            earnings = {
+              totalEarnings: req.user.adminBalance.totalEarnings,
+              availableBalance: req.user.adminBalance.availableBalance,
+              pendingBalance: 0, // Admin balance doesn't have pending balance
+            };
+          }
         } else {
           const creatorEarnings = await storage.getCreatorEarnings(userId);
           earnings = creatorEarnings ? {
@@ -1108,6 +1152,7 @@ export async function registerRoutes(
           experienceId: req.params.experienceId,
           accessLevel: req.accessLevel,
           earnings,
+          generationLimit,
         });
       } else {
         // Customer view - show published courses + unpublished courses user has access to
@@ -1367,8 +1412,22 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
-      // Ensure user is marked as creator and has company ID set
       const companyId = await getCompanyIdFromExperience(req.params.experienceId);
+
+      if (req.user.role === "admin") {
+        const usedToday = await storage.getCoursesGeneratedToday(req.user.id);
+        if (usedToday >= 1) {
+          const resetTime = new Date();
+          resetTime.setUTCHours(23, 59, 59, 999);
+          return res.status(429).json({
+            error: "Daily course generation limit reached",
+            details: "Admins are limited to generating 1 course per day.",
+            resetAt: resetTime.toISOString()
+          });
+        }
+      }
+
+      // Ensure user is marked as creator and has company ID set
       if (companyId && (!req.user.whopCompanyId || req.user.role !== "creator")) {
         await storage.updateUser(req.user.id, {
           role: "creator",

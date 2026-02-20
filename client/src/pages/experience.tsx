@@ -39,6 +39,12 @@ interface ExperienceData {
   experienceId: string;
   accessLevel: "admin" | "customer" | "no_access";
   earnings?: { totalEarnings: number; availableBalance: number; pendingBalance: number };
+  generationLimit?: {
+    limit: number;
+    used: number;
+    remaining: number;
+    resetAt: string;
+  };
 }
 
 export default function ExperiencePage() {
@@ -421,12 +427,42 @@ export default function ExperiencePage() {
             </TabsContent>
 
             <TabsContent value="create" className="mt-5" ref={createTabRef}>
-              {!generatedCourse ? (
-                <CourseGenerator
-                  onGenerate={setGeneratedCourse}
-                  isGenerating={isGenerating}
-                  onGeneratingChange={setIsGenerating}
-                />
+              {data?.generationLimit && data.generationLimit.remaining <= 0 ? (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                      <AlertTriangle className="h-6 w-6 text-amber-500" />
+                    </div>
+                    <h3 className="text-base font-semibold mb-1 text-amber-500">Daily Limit Reached</h3>
+                    <p className="text-sm text-muted-foreground mb-5 max-w-sm">
+                      You have reached your daily course generation limit ({data.generationLimit.used}/{data.generationLimit.limit}).
+                      <br />
+                      Your limit will reset on {new Date(data.generationLimit.resetAt).toLocaleString()}.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : !generatedCourse ? (
+                <div className="space-y-4">
+                  {data?.generationLimit && (
+                    <div className="flex justify-end mb-2">
+                      <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full inline-flex items-center">
+                        <Sparkles className="h-3.5 w-3.5 mr-1.5 text-primary" />
+                        Daily Generations Remaining: <strong className="ml-1 text-foreground">{data.generationLimit.remaining}</strong>
+                        <span className="mx-1.5 opacity-50">•</span>
+                        Resets in: {
+                          Math.max(0, Math.floor((new Date(data.generationLimit.resetAt).getTime() - Date.now()) / (1000 * 60 * 60)))
+                        }h {
+                          Math.max(0, Math.floor(((new Date(data.generationLimit.resetAt).getTime() - Date.now()) % (1000 * 60 * 60)) / (1000 * 60)))
+                        }m
+                      </div>
+                    </div>
+                  )}
+                  <CourseGenerator
+                    onGenerate={setGeneratedCourse}
+                    isGenerating={isGenerating}
+                    onGeneratingChange={setIsGenerating}
+                  />
+                </div>
               ) : (
                 <CoursePreview
                   course={generatedCourse}

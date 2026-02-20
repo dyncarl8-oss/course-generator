@@ -186,6 +186,8 @@ export interface IStorage {
 
   addAdminEarnings(amount: number): Promise<void>;
   deductAdminEarnings(adminId: string, amount: number): Promise<void>;
+
+  getCoursesGeneratedToday(creatorId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -682,6 +684,24 @@ export class DatabaseStorage implements IStorage {
         "adminBalance.updatedAt": new Date(),
       },
     });
+  }
+
+  async getCoursesGeneratedToday(creatorId: string): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const endOfDay = new Date();
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const count = await CourseModel.countDocuments({
+      creatorId,
+      createdAt: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      }
+    });
+
+    return count;
   }
 }
 

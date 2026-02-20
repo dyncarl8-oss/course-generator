@@ -443,25 +443,12 @@ export default function ExperiencePage() {
                 </Card>
               ) : !generatedCourse ? (
                 <div className="space-y-4">
-                  {data?.generationLimit && (
-                    <div className="flex justify-end mb-2">
-                      <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full inline-flex items-center">
-                        <Sparkles className="h-3.5 w-3.5 mr-1.5 text-primary" />
-                        Daily Generations Remaining: <strong className="ml-1 text-foreground">{data.generationLimit.remaining}</strong>
-                        <span className="mx-1.5 opacity-50">•</span>
-                        Resets in: {
-                          Math.max(0, Math.floor((new Date(data.generationLimit.resetAt).getTime() - Date.now()) / (1000 * 60 * 60)))
-                        }h {
-                          Math.max(0, Math.floor(((new Date(data.generationLimit.resetAt).getTime() - Date.now()) % (1000 * 60 * 60)) / (1000 * 60)))
-                        }m
-                      </div>
-                    </div>
-                  )}
                   <CourseGenerator
                     companyId={experienceId!}
                     onGenerated={setGeneratedCourse}
                     isGenerating={isGenerating}
                     setIsGenerating={setIsGenerating}
+                    generationLimit={data?.generationLimit}
                   />
                 </div>
               ) : (

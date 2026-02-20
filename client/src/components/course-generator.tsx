@@ -16,6 +16,12 @@ interface CourseGeneratorProps {
   isGenerating: boolean;
   setIsGenerating: (generating: boolean) => void;
   apiBasePath?: string;
+  generationLimit?: {
+    limit: number;
+    used: number;
+    remaining: number;
+    resetAt: string;
+  };
 }
 
 const exampleTopics = [
@@ -25,7 +31,7 @@ const exampleTopics = [
   { icon: Palette, label: "Design", topic: "UI/UX Design Principles" },
 ];
 
-export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGenerating, apiBasePath }: CourseGeneratorProps) {
+export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGenerating, apiBasePath, generationLimit }: CourseGeneratorProps) {
   const [topic, setTopic] = useState("");
   const [isGenerationComplete, setIsGenerationComplete] = useState(false);
   const { toast } = useToast();
@@ -151,10 +157,23 @@ export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGen
         <Card>
           <CardContent className="p-5 space-y-5">
             <div className="space-y-3">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-amber-500" />
-                What would you like to teach?
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-amber-500" />
+                  What would you like to teach?
+                </label>
+                {generationLimit && (
+                  <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <span>Daily Generations: <strong>{generationLimit.remaining}</strong> remaining</span>
+                    {generationLimit.used > 0 && (
+                      <span className="opacity-70">
+                        (Resets in {Math.max(0, Math.floor((new Date(generationLimit.resetAt).getTime() - Date.now()) / (1000 * 60 * 60)))}h {Math.max(0, Math.floor(((new Date(generationLimit.resetAt).getTime() - Date.now()) % (1000 * 60 * 60)) / (1000 * 60)))}m)
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
               <Textarea
                 placeholder="e.g., 'Complete Guide to Machine Learning', 'Mastering Watercolor Painting'"
                 value={topic}

@@ -386,6 +386,7 @@ export default function DashboardPage() {
                   onGenerated={setGeneratedCourse}
                   isGenerating={isGenerating}
                   setIsGenerating={setIsGenerating}
+                  generationLimit={data?.generationLimit}
                 />
               </div>
             ) : (

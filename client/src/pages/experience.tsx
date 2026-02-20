@@ -427,38 +427,54 @@ export default function ExperiencePage() {
             </TabsContent>
 
             <TabsContent value="create" className="mt-5" ref={createTabRef}>
-              {data?.generationLimit && data.generationLimit.remaining <= 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                      <AlertTriangle className="h-6 w-6 text-amber-500" />
-                    </div>
-                    <h3 className="text-base font-semibold mb-1 text-amber-500">Daily Limit Reached</h3>
-                    <p className="text-sm text-muted-foreground mb-5 max-w-sm">
-                      You have reached your daily course generation limit ({data.generationLimit.used}/{data.generationLimit.limit}).
-                      <br />
-                      Your limit will reset on {new Date(data.generationLimit.resetAt).toLocaleString()}.
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : !generatedCourse ? (
-                <div className="space-y-4">
-                  <CourseGenerator
-                    companyId={experienceId!}
-                    onGenerated={setGeneratedCourse}
-                    isGenerating={isGenerating}
-                    setIsGenerating={setIsGenerating}
-                    generationLimit={data?.generationLimit}
+              {/* 
+                TODO: RE-ENABLE COURSE GENERATION
+                To restore course generation, replace the Card below with the following standard generator logic:
+                
+                {data?.generationLimit && data.generationLimit.remaining <= 0 ? (
+                  <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                        <AlertTriangle className="h-6 w-6 text-amber-500" />
+                      </div>
+                      <h3 className="text-base font-semibold mb-1 text-amber-500">Daily Limit Reached</h3>
+                      <p className="text-sm text-muted-foreground mb-5 max-w-sm">
+                        You have reached your daily course generation limit ({data.generationLimit.used}/{data.generationLimit.limit}).
+                        <br />
+                        Your limit will reset on {new Date(data.generationLimit.resetAt).toLocaleString()}.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : !generatedCourse ? (
+                  <div className="space-y-4">
+                    <CourseGenerator
+                      companyId={experienceId!}
+                      onGenerated={setGeneratedCourse}
+                      isGenerating={isGenerating}
+                      setIsGenerating={setIsGenerating}
+                      generationLimit={data?.generationLimit}
+                    />
+                  </div>
+                ) : (
+                  <CoursePreview
+                    course={generatedCourse}
+                    onDiscard={() => setGeneratedCourse(null)}
+                    onSave={handleSaveCourse}
+                    isSaving={isGeneratingImage || saveMutation.isPending}
                   />
-                </div>
-              ) : (
-                <CoursePreview
-                  course={generatedCourse}
-                  onDiscard={() => setGeneratedCourse(null)}
-                  onSave={handleSaveCourse}
-                  isSaving={isGeneratingImage || saveMutation.isPending}
-                />
-              )}
+                )}
+              */}
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                    <Sparkles className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Course Generation Updating</h3>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    We're currently upgrading our AI models to provide you with even better course structures. Course generation will be back online shortly.
+                  </p>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </main>

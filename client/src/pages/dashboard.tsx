@@ -341,7 +341,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground mb-5 max-w-sm">
                     Create your first AI-powered course to get started.
                   </p>
-                  <Button disabled className="opacity-60 cursor-not-allowed" data-testid="button-create-first-course">
+                  <Button onClick={() => setActiveTab("create")} data-testid="button-create-first-course">
                     <Sparkles className="h-4 w-4 mr-2" />
                     Create Course
                   </Button>
@@ -382,20 +382,19 @@ export default function DashboardPage() {
                   </div>
                 )}
                 <CourseGenerator
-                  onGenerate={setGeneratedCourse}
+                  companyId={companyId}
+                  onGenerated={setGeneratedCourse}
                   isGenerating={isGenerating}
-                  onGeneratingChange={setIsGenerating}
+                  setIsGenerating={setIsGenerating}
                 />
               </div>
             ) : (
               <CoursePreview
                 course={generatedCourse}
-                onBack={() => setGeneratedCourse(null)}
+                onDiscard={() => setGeneratedCourse(null)}
                 onSave={handleSaveCourse}
                 isSaving={isGeneratingImage || saveMutation.isPending}
                 savingStatus={savingStatus}
-                companyId={companyId}
-                isGeneratingImages={isGeneratingImages}
               />
             )}
           </TabsContent>

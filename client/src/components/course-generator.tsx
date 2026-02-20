@@ -130,7 +130,7 @@ export function CourseGenerator({ companyId, onGenerated, isGenerating, setIsGen
   };
 
   return (
-    <div className="space-y-6" data-testid="card-course-generator">
+    <div className="space-y-6 max-w-xl mx-auto" data-testid="card-course-generator">
       {!isGenerating && (
         <div className="text-center space-y-3">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 dark:from-primary/20 dark:to-primary/10">
@@ -240,7 +240,7 @@ export function CoursePreview({ course, onSave, onDiscard, isSaving, savingStatu
   const totalLessons = course.modules.reduce((acc, m) => acc + m.lessons.length, 0);
 
   return (
-    <Card data-testid="card-course-preview">
+    <Card data-testid="card-course-preview" className="max-w-3xl mx-auto">
       <CardHeader className="pb-4">
         <div className="space-y-4">
           <div className="flex items-start justify-between gap-4 flex-wrap">

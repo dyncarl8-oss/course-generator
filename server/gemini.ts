@@ -4,11 +4,11 @@ import type { GeneratedCourse } from "@shared/schema";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
 const GROUNDING_MODELS = [
-  "gemini-flash-latest",
+  "gemini-2.5-flash-lite",
 ];
 
 const FALLBACK_MODELS = [
-  "gemini-flash-latest",
+  "gemini-2.5-flash-lite",
 ];
 
 interface GenerateOptions {

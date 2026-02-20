@@ -321,9 +321,7 @@ export default function ExperiencePage() {
               <Button
                 onClick={() => setActiveTab("create")}
                 data-testid="button-create-course"
-                className="opacity-60 cursor-not-allowed"
-                disabled
-                title="Course creation is temporarily unavailable"
+                className="gap-2"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Course
@@ -423,22 +421,21 @@ export default function ExperiencePage() {
             </TabsContent>
 
             <TabsContent value="create" className="mt-5" ref={createTabRef}>
-              <div className="max-w-2xl mx-auto">
-                <Card className="border-dashed border-amber-500/40">
-                  <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10">
-                      <AlertTriangle className="h-7 w-7 text-amber-500" />
-                    </div>
-                    <h3 className="text-lg font-semibold mb-2">Course Generation Temporarily Unavailable</h3>
-                    <p className="text-sm text-muted-foreground max-w-md mb-1">
-                      We're currently working on improving the course generation experience.
-                    </p>
-                    <p className="text-sm text-muted-foreground max-w-md">
-                      Please check back later — we'll have everything up and running soon!
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+              {!generatedCourse ? (
+                <CourseGenerator
+                  onGenerate={setGeneratedCourse}
+                  isGenerating={isGenerating}
+                  onGeneratingChange={setIsGenerating}
+                />
+              ) : (
+                <CoursePreview
+                  course={generatedCourse}
+                  onBack={() => setGeneratedCourse(null)}
+                  onSave={handleSaveCourse}
+                  isSaving={isGeneratingImage || saveMutation.isPending}
+                  companyId={experienceId!}
+                />
+              )}
             </TabsContent>
           </Tabs>
         </main>

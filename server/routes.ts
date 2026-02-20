@@ -198,7 +198,7 @@ export async function registerRoutes(
       let earnings;
       let generationLimit = { limit: 1, used: 0, remaining: 1, resetAt: new Date().toISOString() };
 
-      if (req.user.role === "admin") {
+      if (req.user.role === "admin" || req.user.role === "creator") {
         const usedToday = await storage.getCoursesGeneratedToday(req.user.id);
         const resetTime = new Date();
         resetTime.setUTCHours(23, 59, 59, 999);
@@ -465,7 +465,7 @@ export async function registerRoutes(
         return res.status(401).json({ error: "User not found" });
       }
 
-      if (req.user.role === "admin") {
+      if (req.user.role === "admin" || req.user.role === "creator") {
         const usedToday = await storage.getCoursesGeneratedToday(req.user.id);
         if (usedToday >= 1) {
           const resetTime = new Date();
@@ -1114,7 +1114,7 @@ export async function registerRoutes(
         let earnings;
         let generationLimit = { limit: 1, used: 0, remaining: 1, resetAt: new Date().toISOString() };
 
-        if (req.user.role === "admin") {
+        if (req.user.role === "admin" || req.user.role === "creator") {
           const usedToday = await storage.getCoursesGeneratedToday(userId);
           const resetTime = new Date();
           resetTime.setUTCHours(23, 59, 59, 999);
@@ -1414,7 +1414,7 @@ export async function registerRoutes(
 
       const companyId = await getCompanyIdFromExperience(req.params.experienceId);
 
-      if (req.user.role === "admin") {
+      if (req.user.role === "admin" || req.user.role === "creator") {
         const usedToday = await storage.getCoursesGeneratedToday(req.user.id);
         if (usedToday >= 1) {
           const resetTime = new Date();

@@ -428,13 +428,13 @@ export default function ExperiencePage() {
 
             <TabsContent value="create" className="mt-5" ref={createTabRef}>
               {data?.generationLimit && data.generationLimit.remaining <= 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                <Card className="border-dashed max-w-xl mx-auto">
+                  <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                     <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
                       <AlertTriangle className="h-6 w-6 text-amber-500" />
                     </div>
                     <h3 className="text-base font-semibold mb-1 text-amber-500">Daily Limit Reached</h3>
-                    <p className="text-sm text-muted-foreground mb-5 max-w-sm">
+                    <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
                       You have reached your daily course generation limit ({data.generationLimit.used}/{data.generationLimit.limit}).
                       <br />
                       Your limit will reset on {new Date(data.generationLimit.resetAt).toLocaleString()}.

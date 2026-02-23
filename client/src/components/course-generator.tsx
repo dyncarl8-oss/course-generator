@@ -372,14 +372,18 @@ export function CourseGenerator({
                     {generationLimit && (
                       <div className="w-full sm:w-auto flex justify-center sm:justify-end">
                         <div className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-full border text-[9px] sm:text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm ${generationLimit.remaining > 0
-                            ? "bg-secondary/40 border-secondary/40 text-secondary-foreground"
-                            : "bg-amber-50/80 border-amber-200/50 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400"
+                          ? "bg-secondary/40 border-secondary/40 text-secondary-foreground"
+                          : "bg-amber-50/80 border-amber-200/50 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400"
                           }`}>
                           <span className="whitespace-nowrap italic opacity-80">{generationLimit.remaining} / {generationLimit.limit} Daily Limit</span>
-                          <span className="w-px h-3 bg-current/20" />
-                          <span className="font-medium normal-case whitespace-nowrap">
-                            Next reset: {formatResetTime(generationLimit.resetAt)}
-                          </span>
+                          {generationLimit.remaining === 0 && (
+                            <>
+                              <span className="w-px h-3 bg-current/20" />
+                              <span className="font-medium normal-case whitespace-nowrap">
+                                Next reset: {formatResetTime(generationLimit.resetAt)}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}

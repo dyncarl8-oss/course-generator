@@ -47,9 +47,11 @@ interface BlockEditorProps {
     moduleTitle?: string;
     lessonTitle?: string;
     onMoveOutside?: (index: number, direction: 'up' | 'down') => void;
+    active?: boolean;
+    onActive?: () => void;
 }
 
-export function BlockEditor({ blocks, onChange, courseTitle, moduleTitle, lessonTitle, onMoveOutside }: BlockEditorProps) {
+export function BlockEditor({ blocks, onChange, courseTitle, moduleTitle, lessonTitle, onMoveOutside, active, onActive }: BlockEditorProps) {
     const { companyId } = useParams<{ companyId: string }>();
     const { toast } = useToast();
     const [localBlocks, setLocalBlocks] = useState<ILessonBlock[]>(blocks || []);
@@ -169,7 +171,13 @@ export function BlockEditor({ blocks, onChange, courseTitle, moduleTitle, lesson
 
     return (
         <TooltipProvider>
-            <div className="space-y-2 pb-24">
+            <div
+                className={cn(
+                    "space-y-2 pb-8 rounded-2xl transition-all duration-300",
+                    active && "ring-2 ring-primary/20 bg-primary/5 p-4 -m-4 z-10 relative"
+                )}
+                onClick={onActive}
+            >
                 {localBlocks.length === 0 ? (
                     <div className="border border-dashed rounded-[2.5rem] p-16 text-center space-y-8 bg-muted/5 border-muted-foreground/20">
                         <div className="flex justify-center">
@@ -205,7 +213,6 @@ export function BlockEditor({ blocks, onChange, courseTitle, moduleTitle, lesson
                         {localBlocks.map((block, index) => (
                             <div key={block.id}>
                                 <div id={`block-${block.id}`} className="group relative scroll-mt-20">
-                                    {/* ... existing block rendering ... */}
                                     <div className="flex items-start gap-4">
                                         <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity pt-4 z-20">
                                             <Tooltip>
@@ -280,13 +287,6 @@ export function BlockEditor({ blocks, onChange, courseTitle, moduleTitle, lesson
                                 <InsertionPoint onAdd={(type) => addBlock(type, index + 1)} />
                             </div>
                         ))}
-
-                        {/* Persistent Add Block Toolbar at the bottom */}
-                        <div className="mt-12 flex justify-center sticky bottom-0 z-40 pb-4">
-                            <div className="bg-background/80 backdrop-blur-md p-1.5 rounded-full shadow-2xl border border-primary/20 ring-1 ring-black/5 scale-110 hover:scale-125 transition-transform duration-300">
-                                <BlockEditorToolbar onAddBlock={(type) => addBlock(type)} />
-                            </div>
-                        </div>
                     </div>
                 )}
             </div>
@@ -374,7 +374,7 @@ function getBlockIcon(type: string) {
     }
 }
 
-function getInitialContent(type: string) {
+export function getInitialContent(type: string) {
     switch (type) {
         case 'text': return { text: "" };
         case 'image': return { url: "", alt: "", caption: "" };
@@ -623,8 +623,6 @@ function renderBlock(
                         )}
                     </div>
 
-
-
                     <AnimatePresence>
                         {expandedId === block.id && (
                             <motion.div
@@ -661,12 +659,13 @@ function renderBlock(
                                             className="h-8 min-w-[120px]"
                                             disabled={isGenerating}
                                             onClick={async () => {
-                                                setIsGenerating(block.id);
+                                                setter: setIsGenerating(block.id);
                                                 try {
-                                                    const data = await apiRequest("POST", "/api/generate-course-image", {
+                                                    const res = await apiRequest("POST", "/api/generate-course-image", {
                                                         courseTitle: titles.course || 'Topic',
                                                         prompt: block.content.prompt || `Professional educational illustration for ${titles.lesson || 'the lesson'} in a course about ${titles.course || 'the topic'}`
                                                     });
+                                                    const data = await res.json();
 
                                                     if (data.imageUrl) {
                                                         onUpdate({ ...block.content, url: data.imageUrl, prompt: block.content.prompt });

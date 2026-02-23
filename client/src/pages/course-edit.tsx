@@ -94,7 +94,7 @@ import { Link } from "wouter";
 import { cn, getEmbedUrl } from "@/lib/utils";
 import QuizEditor from "@/components/QuizEditor";
 import { MediaDialog } from "@/components/media-dialog";
-import { BlockEditor, BlockEditorToolbar } from "@/components/block-editor";
+import { BlockEditor, BlockEditorToolbar, getInitialContent } from "@/components/block-editor";
 import { ILessonBlock } from "@shared/schema";
 
 function MobileSidebarTrigger() {
@@ -314,6 +314,7 @@ export default function CourseEditPage() {
   const [pendingMediaDelete, setPendingMediaDelete] = useState<{ lessonId: string; mediaId: string } | null>(null);
   const [uploadingMediaId, setUploadingMediaId] = useState<string | null>(null);
   const [showMobileScrollButton, setShowMobileScrollButton] = useState(false);
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
 
@@ -868,6 +869,26 @@ export default function CourseEditPage() {
       editedContentRef.current.set(`content-${lessonId}`, { type: 'lessonContent', value: newContent });
     }
     setIsDirty(checkIfDirtyFromRef());
+  };
+
+  const handleAddBlockToActiveLesson = (type: string) => {
+    if (!activeLessonId) {
+      toast({ title: "No lesson selected", description: "Click on a lesson to add content to it.", variant: "destructive" });
+      return;
+    }
+
+    const currentBlocks = getLessonBlocks({ id: activeLessonId });
+    const newBlock: ILessonBlock = {
+      id: crypto.randomUUID(),
+      type,
+      content: getInitialContent(type),
+      orderIndex: currentBlocks.length
+    };
+
+    const newBlocks = [...currentBlocks, newBlock];
+    trackLessonContentEdit(activeLessonId, JSON.stringify(newBlocks));
+
+    toast({ title: "Block added", description: `Added ${type} block to the active lesson.` });
   };
 
   const handleMoveBlockOutside = (lessonId: string, blockIndex: number, direction: 'up' | 'down') => {
@@ -1476,6 +1497,8 @@ export default function CourseEditPage() {
                                       <div className="relative">
                                         {isEditMode ? (
                                           <BlockEditor
+                                            active={activeLessonId === lesson.id}
+                                            onActive={() => setActiveLessonId(lesson.id)}
                                             blocks={getLessonBlocks(lesson)}
                                             onChange={(blocks) => {
                                               const newContent = JSON.stringify(blocks);
@@ -1649,6 +1672,15 @@ export default function CourseEditPage() {
                                       </div>
                                     );
                                   })()}
+
+                                  {/* Global Floating Toolbar for Edit Mode */}
+                                  {isEditMode && (
+                                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                      <div className="bg-background/80 backdrop-blur-md p-1 rounded-full shadow-2xl border border-primary/20 ring-1 ring-black/5 scale-110 hover:scale-125 transition-all duration-300">
+                                        <BlockEditorToolbar onAddBlock={handleAddBlockToActiveLesson} />
+                                      </div>
+                                    </div>
+                                  )}
 
                                 </section>
                               ))}

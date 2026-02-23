@@ -1673,14 +1673,7 @@ export default function CourseEditPage() {
                                     );
                                   })()}
 
-                                  {/* Global Floating Toolbar for Edit Mode */}
-                                  {isEditMode && (
-                                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                      <div className="bg-background/80 backdrop-blur-md p-1 rounded-full shadow-2xl border border-primary/20 ring-1 ring-black/5 scale-110 hover:scale-125 transition-all duration-300">
-                                        <BlockEditorToolbar onAddBlock={handleAddBlockToActiveLesson} />
-                                      </div>
-                                    </div>
-                                  )}
+
 
                                 </section>
                               ))}
@@ -2178,6 +2171,15 @@ export default function CourseEditPage() {
                 </motion.div>
               )}
           </AnimatePresence>
+
+          {/* Global Floating Toolbar for Edit Mode */}
+          {isEditMode && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-background/80 backdrop-blur-md p-1 rounded-full shadow-2xl border border-primary/20 ring-1 ring-black/5 scale-110 hover:scale-125 transition-all duration-300">
+                <BlockEditorToolbar onAddBlock={handleAddBlockToActiveLesson} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Unsaved Changes Confirmation Dialog */}

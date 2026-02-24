@@ -281,12 +281,7 @@ export function BlockEditor({ blocks, onChange, courseTitle, moduleTitle, lesson
                             </div>
                         ))}
 
-                        {/* Persistent Add Block Toolbar at the bottom */}
-                        <div className="mt-12 flex justify-center sticky bottom-0 z-40 pb-4">
-                            <div className="bg-background/80 backdrop-blur-md p-1.5 rounded-full shadow-2xl border border-primary/20 ring-1 ring-black/5 scale-110 hover:scale-125 transition-transform duration-300">
-                                <BlockEditorToolbar onAddBlock={(type) => addBlock(type)} />
-                            </div>
-                        </div>
+
                     </div>
                 )}
             </div>
